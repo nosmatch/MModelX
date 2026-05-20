@@ -8,6 +8,7 @@
       </div>
 
       <nav class="sidebar-nav">
+        <!-- 概览 -->
         <div
           class="nav-item"
           :class="{ active: $route.path === '/overview' }"
@@ -17,15 +18,57 @@
           <span class="nav-text">概览大盘</span>
         </div>
 
-        <div
-          class="nav-item"
-          :class="{ active: $route.path === '/features' }"
-          @click="navigate('/features')"
-        >
-          <span class="nav-icon">🔧</span>
-          <span class="nav-text">特征工程</span>
+        <!-- 特征工程（可展开） -->
+        <div class="nav-group">
+          <div
+            class="nav-item group-header"
+            :class="{ active: isFeaturesActive, expanded: expandedMenus.features }"
+            @click="toggleMenu('features')"
+          >
+            <span class="nav-icon">🔧</span>
+            <span class="nav-text">特征工程</span>
+            <span class="expand-icon">{{ expandedMenus.features ? '▼' : '▶' }}</span>
+          </div>
+          <div v-show="expandedMenus.features" class="nav-submenu">
+            <div
+              class="nav-item sub-item"
+              :class="{ active: $route.path === '/features/views' }"
+              @click="navigate('/features/views')"
+            >
+              <span class="nav-text">特征视图</span>
+            </div>
+            <div
+              class="nav-item sub-item"
+              :class="{ active: $route.path === '/features/compute' }"
+              @click="navigate('/features/compute')"
+            >
+              <span class="nav-text">特征计算</span>
+            </div>
+            <div
+              class="nav-item sub-item"
+              :class="{ active: $route.path === '/features/materialize' }"
+              @click="navigate('/features/materialize')"
+            >
+              <span class="nav-text">特征物化</span>
+            </div>
+            <div
+              class="nav-item sub-item"
+              :class="{ active: $route.path === '/features/online' }"
+              @click="navigate('/features/online')"
+            >
+              <span class="nav-text">在线查询</span>
+            </div>
+            <div
+              class="nav-item sub-item"
+              :class="{ active: $route.path === '/features/visualization' }"
+              @click="navigate('/features/visualization')"
+            >
+              <span class="nav-text">特征可视化</span>
+            </div>
+          </div>
         </div>
 
+        <!-- 样本工程 -->
         <div
           class="nav-item"
           :class="{ active: $route.path === '/samples' }"
@@ -35,6 +78,7 @@
           <span class="nav-text">样本工程</span>
         </div>
 
+        <!-- 训练管理 -->
         <div
           class="nav-item"
           :class="{ active: $route.path === '/training' }"
@@ -44,6 +88,7 @@
           <span class="nav-text">训练管理</span>
         </div>
 
+        <!-- 模型部署 -->
         <div
           class="nav-item"
           :class="{ active: $route.path === '/serving' }"
@@ -91,15 +136,31 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
 const route = useRoute()
 
+// 展开的菜单
+const expandedMenus = ref({
+  features: true // 默认展开特征工程子菜单
+})
+
+// 检查特征工程菜单是否激活
+const isFeaturesActive = computed(() => {
+  return route.path.startsWith('/features')
+})
+
+// 页面标题
 const pageTitle = computed(() => {
   const titles = {
     '/overview': '概览监控大盘',
+    '/features/views': '特征视图',
+    '/features/compute': '特征计算',
+    '/features/materialize': '特征物化',
+    '/features/online': '在线特征查询',
+    '/features/visualization': '特征可视化',
     '/features': '特征工程',
     '/samples': '样本工程',
     '/training': '训练管理',
@@ -108,8 +169,14 @@ const pageTitle = computed(() => {
   return titles[route.path] || 'MModelX'
 })
 
+// 导航到指定路径
 const navigate = (path) => {
   router.push(path)
+}
+
+// 切换菜单展开状态
+const toggleMenu = (menuName) => {
+  expandedMenus.value[menuName] = !expandedMenus.value[menuName]
 }
 </script>
 
@@ -175,6 +242,50 @@ const navigate = (path) => {
   background: linear-gradient(90deg, rgba(64, 158, 255, 0.2) 0%, rgba(64, 158, 255, 0.1) 100%);
   color: #409eff;
   font-weight: 500;
+}
+
+/* 导航组 */
+.nav-group {
+  margin-bottom: 4px;
+}
+
+.group-header {
+  position: relative;
+  padding-right: 36px;
+}
+
+.expand-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  transition: transform 0.3s;
+}
+
+.group-header.expanded .expand-icon {
+  transform: translateY(-50%) rotate(90deg);
+}
+
+/* 子菜单 */
+.nav-submenu {
+  padding-left: 20px;
+}
+
+.nav-submenu .sub-item {
+  padding: 10px 20px 10px 40px;
+  margin: 2px 12px;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.nav-submenu .sub-item:hover {
+  opacity: 1;
+}
+
+.nav-submenu .sub-item.active {
+  background: rgba(64, 158, 255, 0.15);
+  color: #409eff;
 }
 
 .nav-icon {
