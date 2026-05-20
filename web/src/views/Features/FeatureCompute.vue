@@ -485,15 +485,15 @@ const startCompute = async () => {
       step.timestamp = null
     })
 
-    // 开始模拟计算过程
-    simulateComputeProcess()
+    // 调用实际API
+    await featuresStore.computeFeatures({
+      definition: selectedView.value,
+      inputPath: computeForm.value.inputPath || null,
+      outputPath: computeForm.value.outputPath || null
+    })
 
-    // 调用实际API（这里需要连接后端API）
-    // await featuresStore.computeFeatures({
-    //   definition: selectedView.value,
-    //   inputPath: computeForm.value.inputPath || null,
-    //   outputPath: computeForm.value.outputPath || null
-    // })
+    // 开始模拟计算过程（用于UI展示，实际应该从后端获取实时进度）
+    simulateComputeProcess()
 
   } catch (error) {
     ElMessage.error('启动计算失败: ' + error.message)
@@ -787,7 +787,18 @@ const formatLogTime = (timestamp) => {
   return `${hours}:${minutes}:${seconds}`
 }
 
-// ==================== 清理 ====================
+// ==================== 生命周期 ====================
+onMounted(async () => {
+  // 加载特征视图列表（用于下拉选择）
+  if (featuresStore.views.length === 0) {
+    try {
+      await featuresStore.fetchViews()
+    } catch (error) {
+      console.error('加载特征视图列表失败:', error)
+    }
+  }
+})
+
 onUnmounted(() => {
   if (progressTimer) clearInterval(progressTimer)
   if (logTimer) clearInterval(logTimer)

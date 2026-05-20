@@ -34,7 +34,7 @@ export function registerFeatureView(data) {
  */
 export function getFeatureView(name) {
   return request({
-    url: `/api/features/views/${encodeURIComponent(name)}`,
+    url: `/features/views/${encodeURIComponent(name)}`,
     method: 'get'
   })
 }
@@ -50,7 +50,7 @@ export function getFeatureView(name) {
  */
 export function listFeatureViews(params = {}) {
   return request({
-    url: '/api/features/views',
+    url: '/features/views',
     method: 'get',
     params
   })
@@ -67,7 +67,7 @@ export function listFeatureViews(params = {}) {
  */
 export function updateFeatureView(name, data) {
   return request({
-    url: `/api/features/views/${encodeURIComponent(name)}`,
+    url: `/features/views/${encodeURIComponent(name)}`,
     method: 'put',
     data
   })
@@ -80,7 +80,7 @@ export function updateFeatureView(name, data) {
  */
 export function deleteFeatureView(name) {
   return request({
-    url: `/api/features/views/${encodeURIComponent(name)}`,
+    url: `/features/views/${encodeURIComponent(name)}`,
     method: 'delete'
   })
 }
@@ -96,7 +96,7 @@ export function deleteFeatureView(name) {
  */
 export function registerFeatureDefinition(definition) {
   return request({
-    url: '/api/features/definitions',
+    url: '/features/definitions',
     method: 'post',
     data: definition
   })
@@ -112,7 +112,7 @@ export function registerFeatureDefinition(definition) {
  */
 export function computeFeatures(data) {
   return request({
-    url: '/api/features/compute',
+    url: '/features/compute',
     method: 'post',
     data
   })
@@ -125,7 +125,7 @@ export function computeFeatures(data) {
  */
 export function batchComputeFeatures(definitions) {
   return request({
-    url: '/api/features/compute/batch',
+    url: '/features/compute/batch',
     method: 'post',
     data: { definitions }
   })
@@ -138,7 +138,7 @@ export function batchComputeFeatures(definitions) {
  */
 export function materializeFeatures(featureViewName) {
   return request({
-    url: `/api/features/materialize/${encodeURIComponent(featureViewName)}`,
+    url: `/features/materialize/${encodeURIComponent(featureViewName)}`,
     method: 'post'
   })
 }
@@ -153,7 +153,7 @@ export function materializeFeatures(featureViewName) {
  */
 export function getOnlineFeatures(params) {
   return request({
-    url: '/api/features/online',
+    url: '/features/online',
     method: 'get',
     params
   })
@@ -168,7 +168,7 @@ export function getOnlineFeatures(params) {
  */
 export function testDataSource(config) {
   return request({
-    url: '/api/features/test-connection',
+    url: '/features/test-connection',
     method: 'post',
     data: config
   })
@@ -181,7 +181,7 @@ export function testDataSource(config) {
  */
 export function getFeatureDefinitions(featureViewName) {
   return request({
-    url: `/api/features/views/${encodeURIComponent(featureViewName)}/definitions`,
+    url: `/features/views/${encodeURIComponent(featureViewName)}/definitions`,
     method: 'get'
   })
 }
@@ -194,7 +194,7 @@ export function getFeatureDefinitions(featureViewName) {
  */
 export function deleteFeatureDefinition(featureViewName, featureName) {
   return request({
-    url: `/api/features/views/${encodeURIComponent(featureViewName)}/definitions/${encodeURIComponent(featureName)}`,
+    url: `/features/views/${encodeURIComponent(featureViewName)}/definitions/${encodeURIComponent(featureName)}`,
     method: 'delete'
   })
 }

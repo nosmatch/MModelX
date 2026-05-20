@@ -29,6 +29,13 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- Kafka - 临时注释，等待依赖修复
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+        -->
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
