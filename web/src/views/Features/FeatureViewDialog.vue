@@ -520,25 +520,48 @@ const handleTestConnection = async () => {
     testingConnection.value = true
     connectionResult.value = null
 
-    // 这里调用API测试连接
-    // const result = await featuresStore.testConnection({
-    //   type: formData.value.dataSourceType,
-    //   config: JSON.stringify(formData.value.dataSourceConfig)
-    // })
-    // connectionResult.value = { connected: result }
+    // 验证数据源配置
+    if (!formData.value.dataSourceType) {
+      ElMessage.warning('请先选择数据源类型')
+      return
+    }
 
-    // 模拟测试结果
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    connectionResult.value = { connected: true }
+    if (!formData.value.dataSourceConfig || Object.keys(formData.value.dataSourceConfig).length === 0) {
+      ElMessage.warning('请先配置数据源信息')
+      return
+    }
 
-    if (connectionResult.value.connected) {
-      ElMessage.success('连接测试成功')
+    // 调用后端API测试连接
+    const config = {
+      type: formData.value.dataSourceType,
+      config: JSON.stringify(formData.value.dataSourceConfig)
+    }
+
+    ElMessage.info('正在测试连接...')
+
+    // 调用store中的测试连接方法
+    const result = await featuresStore.testConnection(config)
+
+    connectionResult.value = result
+
+    if (result.connected) {
+      ElMessage.success({
+        message: '连接测试成功！',
+        duration: 3000
+      })
     } else {
-      ElMessage.error('连接测试失败')
+      ElMessage.error({
+        message: '连接测试失败，请检查配置',
+        duration: 5000
+      })
     }
   } catch (error) {
     connectionResult.value = { connected: false }
-    ElMessage.error('连接测试失败: ' + error.message)
+    ElMessage.error({
+      message: '连接测试失败: ' + error.message,
+      duration: 5000,
+      showClose: true
+    })
   } finally {
     testingConnection.value = false
   }
@@ -549,12 +572,113 @@ const handleTestConnection = async () => {
  */
 const applyYamlConfig = () => {
   try {
-    // 解析YAML并更新表单数据（这里简化处理，实际需要YAML解析库）
-    ElMessage.success('配置已应用')
+    // 解析YAML配置（使用简单的JSON解析，因为用户编辑的可能是JSON格式）
+    const parsed = parseYamlOrJson(yamlConfig.value)
+
+    // 更新表单数据
+    if (parsed.name) formData.value.name = parsed.name
+    if (parsed.entity) formData.value.entity = parsed.entity
+    if (parsed.ttl) formData.value.ttl = parsed.ttl
+    if (parsed.description) formData.value.description = parsed.description
+
+    // 更新数据源配置
+    if (parsed.dataSource) {
+      if (parsed.dataSource.type) {
+        formData.value.dataSourceType = parsed.dataSource.type
+      }
+      if (parsed.dataSource.config) {
+        if (typeof parsed.dataSource.config === 'string') {
+          // 如果是字符串，尝试解析为JSON
+          try {
+            formData.value.dataSourceConfig = JSON.parse(parsed.dataSource.config)
+          } catch {
+            formData.value.dataSourceConfig = parsed.dataSource.config
+          }
+        } else {
+          formData.value.dataSourceConfig = parsed.dataSource.config
+        }
+      }
+    }
+
+    ElMessage.success('YAML配置已应用到表单')
     showYamlEditor.value = false
   } catch (error) {
     ElMessage.error('YAML格式不正确: ' + error.message)
   }
+}
+
+/**
+ * 解析YAML或JSON格式
+ */
+const parseYamlOrJson = (text) => {
+  text = text.trim()
+
+  // 尝试JSON解析
+  if (text.startsWith('{')) {
+    return JSON.parse(text)
+  }
+
+  // 简单的YAML解析（不支持复杂嵌套）
+  const lines = text.split('\n')
+  const result = {}
+  let currentObj = result
+  const stack = [{ obj: result, indent: 0 }]
+
+  for (let line of lines) {
+    if (!line.trim() || line.trim().startsWith('#')) continue
+
+    const indent = line.search(/\S/)
+    const trimmed = line.trim()
+
+    // 查找当前层级的对象
+    while (stack.length > 0 && stack[stack.length - 1].indent >= indent) {
+      stack.pop()
+    }
+
+    currentObj = stack[stack.length - 1].obj
+
+    if (trimmed.includes(':')) {
+      const [key, ...valueParts] = trimmed.split(':')
+      const value = valueParts.join(':').trim()
+
+      if (value) {
+        // 有值
+        currentObj[key.trim()] = parseValue(value)
+      } else {
+        // 没有值，创建嵌套对象
+        const newObj = {}
+        currentObj[key.trim()] = newObj
+        stack.push({ obj: newObj, indent })
+      }
+    }
+  }
+
+  return result
+}
+
+/**
+ * 解析值
+ */
+const parseValue = (value) => {
+  value = value.trim()
+
+  // 去除引号
+  if ((value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))) {
+    return value.slice(1, -1)
+  }
+
+  // 数字
+  if (!isNaN(value)) {
+    return Number(value)
+  }
+
+  // 布尔值
+  if (value === 'true') return true
+  if (value === 'false') return false
+  if (value === 'null') return null
+
+  return value
 }
 
 /**
