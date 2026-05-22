@@ -28,12 +28,12 @@ public interface FeatureRepository extends JpaRepository<Feature, Long> {
     List<Feature> findByFeatureView_Id(Long featureViewId);
 
     /**
-     * 根据特征视图ID查找活跃的特征
+     * 根据特征视图ID查找活跃的特征（包含DRAFT和ACTIVE状态）
      *
      * @param viewId 特征视图ID
-     * @return 活跃的特征列表
+     * @return 特征列表
      */
-    @Query("SELECT f FROM Feature f WHERE f.featureView.id = :viewId AND f.status = 'ACTIVE'")
+    @Query("SELECT f FROM Feature f WHERE f.featureView.id = :viewId AND f.status IN ('ACTIVE', 'DRAFT', 'COMPUTING')")
     List<Feature> findActiveFeaturesByViewId(@Param("viewId") Long viewId);
 
     /**

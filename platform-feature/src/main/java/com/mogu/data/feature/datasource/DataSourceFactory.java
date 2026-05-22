@@ -54,6 +54,7 @@ public class DataSourceFactory {
     @PostConstruct
     public void init() {
         adapterMap.put(DataSourceType.POSTGRESQL, postgreSqlAdapter);
+        adapterMap.put(DataSourceType.MYSQL, postgreSqlAdapter); // MySQL复用PostgreSQL适配器（JDBC SQL兼容）
         adapterMap.put(DataSourceType.MINIO, minioAdapter);
         adapterMap.put(DataSourceType.KAFKA, kafkaAdapter);
         adapterMap.put(DataSourceType.REDIS, redisAdapter);

@@ -33,7 +33,7 @@
             <el-tag>{{ viewDetail.entity }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="数据源">
-            <el-tag type="info">{{ DataSourceTypeLabels[viewDetail.dataSourceType] }}</el-tag>
+            <el-tag type="info">{{ viewDetail.datasourceName || '未配置' }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="TTL">
             {{ viewDetail.ttl }} 天
@@ -112,7 +112,7 @@
                 size="small"
                 type="danger"
                 :icon="Delete"
-                @click="handleDeleteFeature($index)"
+                @click="handleDeleteFeature(row, $index)"
               >
                 删除
               </el-button>
@@ -127,12 +127,23 @@
           <span>数据源配置</span>
         </template>
 
-        <pre class="config-json">{{ formatConfig(viewDetail.dataSourceConfig) }}</pre>
+        <pre class="config-json">{{ formatConfig(viewDetail.sourceConfig) }}</pre>
       </el-card>
     </div>
 
     <!-- 错误状态 -->
     <el-empty v-else description="未找到特征视图" />
+
+    <!-- 添加/编辑特征对话框 -->
+    <feature-dialog
+      v-if="showFeatureDialog"
+      v-model:visible="showFeatureDialog"
+      :mode="featureDialogMode"
+      :feature-view-name="viewDetail?.name"
+      :feature-data="currentFeatureData"
+      @close="showFeatureDialog = false"
+      @success="handleFeatureSuccess"
+    />
   </div>
 </template>
 
@@ -157,7 +168,7 @@ import {
   Plus
 } from '@element-plus/icons-vue'
 import { useFeaturesStore } from '@/stores/features'
-import { DataSourceTypeLabels } from '@/constants/features'
+import FeatureDialog from './FeatureDialog.vue'
 
 // ==================== 路由和Store ====================
 const route = useRoute()
@@ -167,6 +178,11 @@ const featuresStore = useFeaturesStore()
 // ==================== 响应式数据 ====================
 const loading = ref(true)
 const viewDetail = ref(null)
+
+// 特征对话框
+const showFeatureDialog = ref(false)
+const featureDialogMode = ref('create')
+const currentFeatureData = ref(null)
 
 // ==================== 方法 ====================
 /**
@@ -269,23 +285,27 @@ const handleDelete = async () => {
  * 添加特征
  */
 const handleAddFeature = () => {
-  ElMessage.info('添加特征功能开发中')
+  featureDialogMode.value = 'create'
+  currentFeatureData.value = null
+  showFeatureDialog.value = true
 }
 
 /**
  * 编辑特征
  */
 const handleEditFeature = (row, index) => {
-  ElMessage.info(`编辑特征: ${row.name}`)
+  featureDialogMode.value = 'edit'
+  currentFeatureData.value = { ...row }
+  showFeatureDialog.value = true
 }
 
 /**
  * 删除特征
  */
-const handleDeleteFeature = async (index) => {
+const handleDeleteFeature = async (row, index) => {
   try {
     await ElMessageBox.confirm(
-      '确定要删除这个特征吗？',
+      `确定要删除特征 "${row.name}" 吗？`,
       '确认删除',
       {
         confirmButtonText: '确定',
@@ -294,11 +314,22 @@ const handleDeleteFeature = async (index) => {
       }
     )
 
-    viewDetail.value.features.splice(index, 1)
+    await featuresApi.deleteFeatureDefinition(viewDetail.value.name, row.name)
     ElMessage.success('删除成功')
+    // 刷新详情
+    await loadViewDetail()
   } catch (error) {
-    // 用户取消
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败: ' + (error.message || '未知错误'))
+    }
   }
+}
+
+/**
+ * 特征操作成功后刷新
+ */
+const handleFeatureSuccess = async () => {
+  await loadViewDetail()
 }
 
 /**

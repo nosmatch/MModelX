@@ -79,71 +79,107 @@
       <div class="form-section">
         <h3 class="section-title">数据源配置</h3>
 
-        <!-- 数据源类型 -->
-        <el-form-item label="数据源类型" prop="dataSourceType">
+        <!-- 数据源选择 -->
+        <el-form-item label="数据源" prop="datasourceId">
           <el-select
-            v-model="formData.dataSourceType"
-            placeholder="选择数据源类型"
-            @change="handleDataSourceTypeChange"
+            v-model="formData.datasourceId"
+            placeholder="选择数据源"
+            @change="handleDataSourceChange"
           >
             <el-option
-              v-for="item in DataSourceTypeOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
+              v-for="item in dataSources"
+              :key="item.id"
+              :label="`${item.name} (${DataSourceTypeLabels[item.type] || item.type})`"
+              :value="item.id"
             />
           </el-select>
+          <div class="form-tip">从数据源配置管理中选择已配置的数据源</div>
         </el-form-item>
 
-        <!-- 动态数据源配置表单 -->
-        <template v-if="formData.dataSourceType">
-          <!-- PostgreSQL 配置 -->
-          <template v-if="formData.dataSourceType === 'postgresql'">
-            <el-form-item label="表名" prop="dataSourceConfig.table">
-              <el-input
-                v-model="formData.dataSourceConfig.table"
-                placeholder="如：users、orders"
+        <!-- 动态数据源使用配置表单 -->
+        <template v-if="selectedDataSourceType">
+          <!-- PostgreSQL / MySQL 配置 -->
+          <template v-if="selectedDataSourceType === 'postgresql' || selectedDataSourceType === 'mysql'">
+            <el-form-item label="表名" prop="sourceConfig.table">
+              <el-select
+                v-model="formData.sourceConfig.table"
+                placeholder="选择数据表"
+                filterable
                 clearable
-              />
+                :loading="loadingTables"
+                @change="handleTableChange"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="table in tables"
+                  :key="table"
+                  :label="table"
+                  :value="table"
+                />
+              </el-select>
             </el-form-item>
 
-            <el-form-item label="实体字段" prop="dataSourceConfig.entityColumn">
-              <el-input
-                v-model="formData.dataSourceConfig.entityColumn"
-                placeholder="如：id、user_id"
+            <el-form-item label="实体字段" prop="sourceConfig.entityColumn">
+              <el-select
+                v-model="formData.sourceConfig.entityColumn"
+                placeholder="选择实体字段"
+                filterable
                 clearable
-              />
+                :loading="loadingColumns"
+                :disabled="!formData.sourceConfig.table"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="col in columns"
+                  :key="col.name"
+                  :label="`${col.name} (${col.type})`"
+                  :value="col.name"
+                />
+              </el-select>
+              <div class="form-tip">用于关联实体ID的字段</div>
             </el-form-item>
 
-            <el-form-item label="日期字段" prop="dataSourceConfig.dateColumn">
-              <el-input
-                v-model="formData.dataSourceConfig.dateColumn"
-                placeholder="如：created_at、updated_at"
+            <el-form-item label="日期字段" prop="sourceConfig.dateColumn">
+              <el-select
+                v-model="formData.sourceConfig.dateColumn"
+                placeholder="选择日期字段（可选）"
+                filterable
                 clearable
-              />
+                :loading="loadingColumns"
+                :disabled="!formData.sourceConfig.table"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="col in columns"
+                  :key="col.name"
+                  :label="`${col.name} (${col.type})`"
+                  :value="col.name"
+                />
+              </el-select>
+              <div class="form-tip">用于时间窗口计算的字段</div>
             </el-form-item>
           </template>
 
           <!-- API 配置 -->
-          <template v-else-if="formData.dataSourceType === 'api'">
-            <el-form-item label="API地址" prop="dataSourceConfig.url">
+          <template v-else-if="selectedDataSourceType === 'api'">
+            <el-form-item label="接口路径" prop="sourceConfig.path">
               <el-input
-                v-model="formData.dataSourceConfig.url"
-                placeholder="https://api.example.com/data"
+                v-model="formData.sourceConfig.path"
+                placeholder="/v1/data"
                 clearable
               />
             </el-form-item>
 
-            <el-form-item label="请求方法" prop="dataSourceConfig.method">
-              <el-select v-model="formData.dataSourceConfig.method">
+            <el-form-item label="请求方法" prop="sourceConfig.method">
+              <el-select v-model="formData.sourceConfig.method">
                 <el-option label="GET" value="GET" />
                 <el-option label="POST" value="POST" />
               </el-select>
             </el-form-item>
 
-            <el-form-item label="实体字段" prop="dataSourceConfig.entityField">
+            <el-form-item label="实体字段" prop="sourceConfig.entityField">
               <el-input
-                v-model="formData.dataSourceConfig.entityField"
+                v-model="formData.sourceConfig.entityField"
                 placeholder="响应JSON中的实体ID字段名"
                 clearable
               />
@@ -161,25 +197,25 @@
           </template>
 
           <!-- Redis 配置 -->
-          <template v-else-if="formData.dataSourceType === 'redis'">
-            <el-form-item label="Key模式" prop="dataSourceConfig.keyPattern">
+          <template v-else-if="selectedDataSourceType === 'redis'">
+            <el-form-item label="Key模式" prop="sourceConfig.keyPattern">
               <el-input
-                v-model="formData.dataSourceConfig.keyPattern"
+                v-model="formData.sourceConfig.keyPattern"
                 placeholder="如：user:*、item:*"
                 clearable
               />
             </el-form-item>
 
-            <el-form-item label="实体字段" prop="dataSourceConfig.entityField">
+            <el-form-item label="实体字段" prop="sourceConfig.entityField">
               <el-input
-                v-model="formData.dataSourceConfig.entityField"
+                v-model="formData.sourceConfig.entityField"
                 placeholder="Key中提取实体ID的字段"
                 clearable
               />
             </el-form-item>
 
-            <el-form-item label="数据结构" prop="dataSourceConfig.dataStructure">
-              <el-select v-model="formData.dataSourceConfig.dataStructure">
+            <el-form-item label="数据结构" prop="sourceConfig.dataStructure">
+              <el-select v-model="formData.sourceConfig.dataStructure">
                 <el-option label="String" value="string" />
                 <el-option label="Hash" value="hash" />
                 <el-option label="List" value="list" />
@@ -190,60 +226,45 @@
           </template>
 
           <!-- Kafka 配置 -->
-          <template v-else-if="formData.dataSourceType === 'kafka'">
-            <el-form-item label="Topic" prop="dataSourceConfig.topic">
+          <template v-else-if="selectedDataSourceType === 'kafka'">
+            <el-form-item label="Topic" prop="sourceConfig.topic">
               <el-input
-                v-model="formData.dataSourceConfig.topic"
+                v-model="formData.sourceConfig.topic"
                 placeholder="如：user-events"
                 clearable
               />
             </el-form-item>
 
-            <el-form-item label="实体字段" prop="dataSourceConfig.entityField">
+            <el-form-item label="实体字段" prop="sourceConfig.entityField">
               <el-input
-                v-model="formData.dataSourceConfig.entityField"
+                v-model="formData.sourceConfig.entityField"
                 placeholder="消息JSON中的实体ID字段名"
                 clearable
               />
             </el-form-item>
 
-            <el-form-item label="最大记录数" prop="dataSourceConfig.maxPollRecords">
+            <el-form-item label="最大记录数" prop="sourceConfig.maxPollRecords">
               <el-input-number
-                v-model="formData.dataSourceConfig.maxPollRecords"
+                v-model="formData.sourceConfig.maxPollRecords"
                 :min="1"
                 :max="10000"
                 :step="100"
               />
             </el-form-item>
 
-            <el-form-item label="消费者组" prop="dataSourceConfig.consumerGroup">
+            <el-form-item label="消费者组" prop="sourceConfig.consumerGroup">
               <el-input
-                v-model="formData.dataSourceConfig.consumerGroup"
+                v-model="formData.sourceConfig.consumerGroup"
                 placeholder="feature-computation-group"
                 clearable
               />
             </el-form-item>
           </template>
-
-          <!-- 测试连接按钮 -->
-          <el-form-item>
-            <el-button
-              type="info"
-              :icon="Connection"
-              :loading="testingConnection"
-              @click="handleTestConnection"
-            >
-              测试连接
-            </el-button>
-            <span v-if="connectionResult" class="connection-result" :class="connectionResult.connected ? 'success' : 'error'">
-              {{ connectionResult.connected ? '✓ 连接成功' : '✗ 连接失败' }}
-            </span>
-          </el-form-item>
         </template>
       </div>
 
       <!-- YAML配置预览 -->
-      <div class="form-section" v-if="formData.dataSourceType">
+      <div class="form-section" v-if="formData.datasourceId">
         <h3 class="section-title">
           配置预览
           <el-button
@@ -313,7 +334,6 @@
  * - 数据源配置表单（根据类型动态显示）
  * - YAML代码编辑器
  * - 表单验证
- * - 连接测试
  *
  * @author MModelX Team
  * @since 2026-05-20
@@ -322,13 +342,12 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   Document,
-  Connection,
   Edit
 } from '@element-plus/icons-vue'
 import MonacoEditor from '@/components/MonacoEditor.vue'
-import { useFeaturesStore } from '@/stores/features'
+import { listDataSources, getDataSourceTables, getDataSourceColumns } from '@/api/modules/datasources'
 import {
-  DataSourceTypeOptions,
+  DataSourceTypeLabels,
   CommonEntityTypes,
   DefaultValues,
   ValidationPatterns,
@@ -338,9 +357,6 @@ import {
   RedisConfigTemplate,
   KafkaConfigTemplate
 } from '@/constants/features'
-
-// ==================== Store ====================
-const featuresStore = useFeaturesStore()
 
 // ==================== Props ====================
 const props = defineProps({
@@ -365,11 +381,14 @@ const emit = defineEmits(['close', 'save'])
 // ==================== 响应式数据 ====================
 const formRef = ref(null)
 const submitting = ref(false)
-const testingConnection = ref(false)
-const connectionResult = ref(null)
 const showYamlEditor = ref(false)
 const yamlConfig = ref('')
 const apiHeadersText = ref('')
+const dataSources = ref([])
+const tables = ref([])
+const columns = ref([])
+const loadingTables = ref(false)
+const loadingColumns = ref(false)
 
 // 表单数据
 const formData = ref({
@@ -377,8 +396,8 @@ const formData = ref({
   entity: '',
   ttl: DefaultValues.TTL,
   description: '',
-  dataSourceType: '',
-  dataSourceConfig: {}
+  datasourceId: null,
+  sourceConfig: {}
 })
 
 // ==================== 计算属性 ====================
@@ -390,22 +409,29 @@ const dialogTitle = computed(() => {
 })
 
 /**
+ * 当前选中的数据源类型
+ */
+const selectedDataSourceType = computed(() => {
+  const ds = dataSources.value.find(d => d.id === formData.value.datasourceId)
+  return ds ? ds.type : null
+})
+
+/**
  * YAML配置预览
  */
 const yamlPreview = computed(() => {
-  if (!formData.value.dataSourceType || !formData.value.dataSourceConfig) {
+  if (!formData.value.datasourceId || !formData.value.sourceConfig) {
     return '# 请先配置数据源'
   }
 
+  const ds = dataSources.value.find(d => d.id === formData.value.datasourceId)
   const config = {
     name: formData.value.name,
     entity: formData.value.entity,
     ttl: formData.value.ttl,
     description: formData.value.description,
-    dataSource: {
-      type: formData.value.dataSourceType,
-      config: formData.value.dataSourceConfig
-    }
+    datasource: ds ? { id: ds.id, name: ds.name, type: ds.type } : null,
+    sourceConfig: formData.value.sourceConfig
   }
 
   // 简单的YAML转换
@@ -435,16 +461,32 @@ const formRules = {
     { type: 'number', min: DefaultValues.MIN_TTL, message: ValidationMessages.TTL_MIN, trigger: 'blur' },
     { type: 'number', max: DefaultValues.MAX_TTL, message: ValidationMessages.TTL_MAX, trigger: 'blur' }
   ],
-  dataSourceType: [
-    { required: true, message: ValidationMessages.DATA_SOURCE_TYPE_REQUIRED, trigger: 'change' }
+  datasourceId: [
+    { required: true, message: '请选择数据源', trigger: 'change' }
   ]
 }
 
 // ==================== 方法 ====================
 /**
+ * 加载数据源列表
+ */
+const loadDataSources = async () => {
+  try {
+    const response = await listDataSources()
+    if (response.code === '200') {
+      // 只显示已配置且状态为 ACTIVE（未禁用）的数据源
+      const allSources = response.data || []
+      dataSources.value = allSources.filter(ds => ds.status === 'ACTIVE')
+    }
+  } catch (error) {
+    console.error('加载数据源列表失败:', error)
+  }
+}
+
+/**
  * 初始化表单数据
  */
-const initFormData = () => {
+const initFormData = async () => {
   if (props.mode === 'edit' && props.viewData) {
     // 编辑模式：填充现有数据
     formData.value = {
@@ -452,13 +494,31 @@ const initFormData = () => {
       entity: props.viewData.entity,
       ttl: props.viewData.ttl || DefaultValues.TTL,
       description: props.viewData.description || '',
-      dataSourceType: props.viewData.dataSourceType || '',
-      dataSourceConfig: props.viewData.dataSourceConfig || {}
+      datasourceId: props.viewData.datasourceId || null,
+      sourceConfig: {}
+    }
+
+    // 解析 sourceConfig
+    if (props.viewData.sourceConfig) {
+      try {
+        formData.value.sourceConfig = JSON.parse(props.viewData.sourceConfig)
+      } catch (e) {
+        formData.value.sourceConfig = {}
+      }
+    }
+
+    // 如果是数据库类型，重新加载表名和字段列表
+    const ds = dataSources.value.find(d => d.id === formData.value.datasourceId)
+    if (ds && (ds.type === 'postgresql' || ds.type === 'mysql')) {
+      await loadTables(formData.value.datasourceId)
+      if (formData.value.sourceConfig.table) {
+        await handleTableChange(formData.value.sourceConfig.table)
+      }
     }
 
     // 如果是API类型，格式化headers
-    if (formData.value.dataSourceType === 'api' && formData.value.dataSourceConfig.headers) {
-      apiHeadersText.value = JSON.stringify(formData.value.dataSourceConfig.headers, null, 2)
+    if (ds && ds.type === 'api' && formData.value.sourceConfig.headers) {
+      apiHeadersText.value = JSON.stringify(formData.value.sourceConfig.headers, null, 2)
     }
   } else {
     // 创建模式：使用默认值
@@ -467,37 +527,88 @@ const initFormData = () => {
       entity: '',
       ttl: DefaultValues.TTL,
       description: '',
-      dataSourceType: '',
-      dataSourceConfig: {}
+      datasourceId: null,
+      sourceConfig: {}
     }
     apiHeadersText.value = ''
+    tables.value = []
+    columns.value = []
   }
 }
 
 /**
- * 处理数据源类型变化
+ * 处理数据源选择变化
  */
-const handleDataSourceTypeChange = (type) => {
-  // 根据类型设置默认配置模板
+const handleDataSourceChange = async (datasourceId) => {
+  // 清空表名和字段列表
+  tables.value = []
+  columns.value = []
+
+  const ds = dataSources.value.find(d => d.id === datasourceId)
+
+  // 根据数据源类型设置默认配置模板
+  const type = ds ? ds.type : null
   switch (type) {
     case 'postgresql':
-      formData.value.dataSourceConfig = { ...PostgreSQLConfigTemplate }
+    case 'mysql':
+      formData.value.sourceConfig = { ...PostgreSQLConfigTemplate }
+      // 自动加载表名列表
+      await loadTables(datasourceId)
       break
     case 'api':
-      formData.value.dataSourceConfig = { ...ApiConfigTemplate }
+      formData.value.sourceConfig = { ...ApiConfigTemplate }
       apiHeadersText.value = JSON.stringify(ApiConfigTemplate.headers || {}, null, 2)
       break
     case 'redis':
-      formData.value.dataSourceConfig = { ...RedisConfigTemplate }
+      formData.value.sourceConfig = { ...RedisConfigTemplate }
       break
     case 'kafka':
-      formData.value.dataSourceConfig = { ...KafkaConfigTemplate }
+      formData.value.sourceConfig = { ...KafkaConfigTemplate }
       break
     default:
-      formData.value.dataSourceConfig = {}
+      formData.value.sourceConfig = {}
   }
+}
 
-  connectionResult.value = null
+/**
+ * 加载数据源表名列表
+ */
+const loadTables = async (datasourceId) => {
+  if (!datasourceId) return
+  try {
+    loadingTables.value = true
+    const response = await getDataSourceTables(datasourceId)
+    if (response.code === '200') {
+      tables.value = response.data || []
+    }
+  } catch (error) {
+    console.error('加载表名列表失败:', error)
+    ElMessage.warning('加载表名列表失败: ' + error.message)
+  } finally {
+    loadingTables.value = false
+  }
+}
+
+/**
+ * 处理表名选择变化
+ */
+const handleTableChange = async (tableName) => {
+  if (!tableName) {
+    columns.value = []
+    return
+  }
+  try {
+    loadingColumns.value = true
+    const response = await getDataSourceColumns(formData.value.datasourceId, tableName)
+    if (response.code === '200') {
+      columns.value = response.data || []
+    }
+  } catch (error) {
+    console.error('加载字段列表失败:', error)
+    ElMessage.warning('加载字段列表失败: ' + error.message)
+  } finally {
+    loadingColumns.value = false
+  }
 }
 
 /**
@@ -507,67 +618,12 @@ const updateApiHeaders = () => {
   try {
     if (apiHeadersText.value.trim()) {
       const headers = JSON.parse(apiHeadersText.value)
-      formData.value.dataSourceConfig.headers = headers
+      formData.value.sourceConfig.headers = headers
     } else {
-      formData.value.dataSourceConfig.headers = {}
+      formData.value.sourceConfig.headers = {}
     }
   } catch (error) {
     ElMessage.warning('请求头JSON格式不正确')
-  }
-}
-
-/**
- * 测试数据源连接
- */
-const handleTestConnection = async () => {
-  try {
-    testingConnection.value = true
-    connectionResult.value = null
-
-    // 验证数据源配置
-    if (!formData.value.dataSourceType) {
-      ElMessage.warning('请先选择数据源类型')
-      return
-    }
-
-    if (!formData.value.dataSourceConfig || Object.keys(formData.value.dataSourceConfig).length === 0) {
-      ElMessage.warning('请先配置数据源信息')
-      return
-    }
-
-    // 调用后端API测试连接
-    const config = {
-      type: formData.value.dataSourceType,
-      config: JSON.stringify(formData.value.dataSourceConfig)
-    }
-
-    ElMessage.info('正在测试连接...')
-
-    // 调用store中的测试连接方法
-    const result = await featuresStore.testConnection(config)
-
-    connectionResult.value = result
-
-    if (result.connected) {
-      ElMessage.success({
-        message: '连接测试成功！',
-        duration: 3000
-      })
-    } else {
-      ElMessage.error({
-        message: '连接测试失败，请检查配置',
-        duration: 5000
-      })
-    }
-  } catch (error) {
-    connectionResult.value = { connected: false }
-    ElMessage.error({
-      message: '连接测试失败: ' + error.message,
-      duration: 5000,
-      showClose: true
-    })
-  } finally {
-    testingConnection.value = false
   }
 }
 
@@ -586,21 +642,18 @@ const applyYamlConfig = () => {
     if (parsed.description) formData.value.description = parsed.description
 
     // 更新数据源配置
-    if (parsed.dataSource) {
-      if (parsed.dataSource.type) {
-        formData.value.dataSourceType = parsed.dataSource.type
-      }
-      if (parsed.dataSource.config) {
-        if (typeof parsed.dataSource.config === 'string') {
-          // 如果是字符串，尝试解析为JSON
-          try {
-            formData.value.dataSourceConfig = JSON.parse(parsed.dataSource.config)
-          } catch {
-            formData.value.dataSourceConfig = parsed.dataSource.config
-          }
-        } else {
-          formData.value.dataSourceConfig = parsed.dataSource.config
+    if (parsed.datasource && parsed.datasource.id) {
+      formData.value.datasourceId = parsed.datasource.id
+    }
+    if (parsed.sourceConfig) {
+      if (typeof parsed.sourceConfig === 'string') {
+        try {
+          formData.value.sourceConfig = JSON.parse(parsed.sourceConfig)
+        } catch {
+          formData.value.sourceConfig = parsed.sourceConfig
         }
+      } else {
+        formData.value.sourceConfig = parsed.sourceConfig
       }
     }
 
@@ -725,8 +778,8 @@ const handleSubmit = async () => {
       entity: formData.value.entity,
       ttl: formData.value.ttl,
       description: formData.value.description,
-      dataSourceType: formData.value.dataSourceType,
-      dataSourceConfig: JSON.stringify(formData.value.dataSourceConfig)
+      datasourceId: formData.value.datasourceId,
+      sourceConfig: JSON.stringify(formData.value.sourceConfig)
     }
 
     emit('save', submitData)
@@ -746,18 +799,17 @@ const handleClose = () => {
 }
 
 // ==================== 监听器 ====================
-watch(() => props.visible, (visible) => {
+watch(() => props.visible, async (visible) => {
   if (visible) {
-    nextTick(() => {
-      initFormData()
-    })
+    await loadDataSources()
+    await initFormData()
   }
-})
+}, { immediate: true })
 
 // 监听viewData变化（用于编辑模式下数据更新）
-watch(() => props.viewData, () => {
+watch(() => props.viewData, async () => {
   if (props.visible) {
-    initFormData()
+    await initFormData()
   }
 }, { deep: true })
 </script>

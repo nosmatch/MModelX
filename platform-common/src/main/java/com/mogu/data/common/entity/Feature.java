@@ -1,7 +1,9 @@
 package com.mogu.data.common.entity;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import org.hibernate.annotations.Type;
 
 import javax.persistence.*;
 import java.time.LocalDateTime;
@@ -41,8 +43,9 @@ public class Feature {
     @Column(columnDefinition = "TEXT")
     private String sourcePath;
 
-    @Column(columnDefinition = "JSONB")
-    private String config;
+    @Type(type = "com.mogu.data.common.util.JsonbType")
+    @Column(name = "config", columnDefinition = "jsonb")
+    private JsonNode config;
 
     @Column(length = 20)
     @Enumerated(EnumType.STRING)

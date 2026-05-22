@@ -1,6 +1,7 @@
 package com.mogu.data.feature.entity;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 特征视图实体
@@ -16,6 +17,11 @@ public class FeatureView {
     private LocalDateTime updatedAt;
     private Integer version;
     private String status;
+
+    // 数据源关联（从数据源配置管理中引用）
+    private Long datasourceId;
+    private String datasourceName;
+    private String sourceConfig;
 
     public FeatureView() {
     }
@@ -104,6 +110,49 @@ public class FeatureView {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public Long getDatasourceId() {
+        return datasourceId;
+    }
+
+    public void setDatasourceId(Long datasourceId) {
+        this.datasourceId = datasourceId;
+    }
+
+    public String getDatasourceName() {
+        return datasourceName;
+    }
+
+    public void setDatasourceName(String datasourceName) {
+        this.datasourceName = datasourceName;
+    }
+
+    public String getSourceConfig() {
+        return sourceConfig;
+    }
+
+    public void setSourceConfig(String sourceConfig) {
+        this.sourceConfig = sourceConfig;
+    }
+
+    private String datasourceType;
+    private List<com.mogu.data.feature.entity.FeatureDefinition.FeatureSpec> features;
+
+    public String getDatasourceType() {
+        return datasourceType;
+    }
+
+    public void setDatasourceType(String datasourceType) {
+        this.datasourceType = datasourceType;
+    }
+
+    public List<com.mogu.data.feature.entity.FeatureDefinition.FeatureSpec> getFeatures() {
+        return features;
+    }
+
+    public void setFeatures(List<com.mogu.data.feature.entity.FeatureDefinition.FeatureSpec> features) {
+        this.features = features;
     }
 
     public static FeatureView of(String name, String entity, Integer ttl, String description) {

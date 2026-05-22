@@ -235,6 +235,39 @@ public class DataSourceController {
     }
 
     /**
+     * 获取数据源的表名列表
+     *
+     * GET /api/v1/datasources/{id}/tables
+     *
+     * @param id 数据源ID
+     * @return 表名列表
+     */
+    @GetMapping("/{id}/tables")
+    public Result<List<String>> getTables(@PathVariable Long id) {
+        log.info("Getting tables for datasource: {}", id);
+        List<String> tables = dataSourceService.getTables(id);
+        return Result.success(tables);
+    }
+
+    /**
+     * 获取指定表的列信息
+     *
+     * GET /api/v1/datasources/{id}/tables/{table}/columns
+     *
+     * @param id 数据源ID
+     * @param table 表名
+     * @return 列信息列表
+     */
+    @GetMapping("/{id}/tables/{table}/columns")
+    public Result<List<Map<String, String>>> getColumns(
+            @PathVariable Long id,
+            @PathVariable String table) {
+        log.info("Getting columns for datasource: {}, table: {}", id, table);
+        List<Map<String, String>> columns = dataSourceService.getColumns(id, table);
+        return Result.success(columns);
+    }
+
+    /**
      * 处理 BindException（数据验证错误）
      */
     @ExceptionHandler(org.springframework.validation.BindException.class)

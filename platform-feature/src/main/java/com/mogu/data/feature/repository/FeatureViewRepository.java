@@ -29,11 +29,11 @@ public interface FeatureViewRepository extends JpaRepository<FeatureView, Long> 
     Optional<FeatureView> findByName(String name);
 
     /**
-     * 查找所有活跃状态的特征视图
+     * 查找所有非归档状态的特征视图（DRAFT、ACTIVE、DEPRECATED）
      *
-     * @return 活跃的特征视图列表
+     * @return 特征视图列表
      */
-    @Query("SELECT f FROM FeatureView f WHERE f.status = 'ACTIVE'")
+    @Query("SELECT DISTINCT f FROM FeatureView f LEFT JOIN FETCH f.datasource WHERE f.status <> 'ARCHIVED' ORDER BY f.createdAt DESC")
     List<FeatureView> findActiveFeatureViews();
 
     /**

@@ -1,7 +1,9 @@
 package com.mogu.data.common.entity;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import org.hibernate.annotations.Type;
 
 import javax.persistence.*;
 import java.time.LocalDateTime;
@@ -37,9 +39,45 @@ public class FeatureView {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    /**
+     * 关联的数据源ID（直接映射数据库列）
+     */
+    @Column(name = "datasource_id")
+    private Long datasourceId;
+
+    /**
+     * 关联的数据源对象（用于导航和写入）
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "datasource_id", insertable = false, updatable = false)
+    private DataSource datasource;
+
+    /**
+     * 数据源使用配置（JSON格式）
+     *
+     * 存储业务配置信息，如表名、列名、过滤条件等：
+     * {
+     *   "table": "orders",
+     *   "entityColumn": "user_id",
+     *   "columns": ["user_id", "order_amount"],
+     *   "where": "status='completed'"
+     * }
+     */
+    @Type(type = "com.mogu.data.common.util.JsonbType")
+    @Column(name = "source_config", columnDefinition = "jsonb")
+    private JsonNode sourceConfig;
+
+    /**
+     * 【已废弃】数据源类型，请使用 datasource 关联数据源配置
+     */
+    @Deprecated
     @Column(length = 50)
     private String dataSourceType;
 
+    /**
+     * 【已废弃】数据源配置，请使用 datasource 关联数据源配置
+     */
+    @Deprecated
     @Column(columnDefinition = "TEXT")
     private String dataSourceConfig;
 

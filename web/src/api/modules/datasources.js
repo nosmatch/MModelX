@@ -35,3 +35,22 @@ export function disableDataSource(id) {
 export function getDataSourceUsage(id) {
   return request({ url: `/datasources/${id}/usage`, method: 'get' })
 }
+
+/**
+ * 获取数据源的表名列表
+ * @param {number} id - 数据源ID
+ * @returns {Promise<{code: string, message: string, data: Array<string>}>}
+ */
+export function getDataSourceTables(id) {
+  return request({ url: `/datasources/${id}/tables`, method: 'get' })
+}
+
+/**
+ * 获取指定表的列信息
+ * @param {number} id - 数据源ID
+ * @param {string} table - 表名
+ * @returns {Promise<{code: string, message: string, data: Array<{name: string, type: string, nullable: string}>}>}
+ */
+export function getDataSourceColumns(id, table) {
+  return request({ url: `/datasources/${id}/tables/${encodeURIComponent(table)}/columns`, method: 'get' })
+}

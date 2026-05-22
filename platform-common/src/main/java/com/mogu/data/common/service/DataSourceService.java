@@ -480,4 +480,103 @@ public class DataSourceService {
             throw new BusinessException("密码解密失败: " + e.getMessage());
         }
     }
+
+    /**
+     * 获取数据源的表名列表（仅支持 JDBC 数据库）
+     *
+     * @param id 数据源ID
+     * @return 表名列表
+     */
+    public List<String> getTables(Long id) {
+        DataSource dataSource = getDataSource(id);
+        String type = dataSource.getType();
+
+        if (!"postgresql".equals(type) && !"mysql".equals(type)) {
+            throw new BusinessException("当前仅支持 PostgreSQL 和 MySQL 数据源");
+        }
+
+        String driverClass = "postgresql".equals(type)
+            ? "org.postgresql.Driver" : "com.mysql.cj.jdbc.Driver";
+        String urlPrefix = "postgresql".equals(type)
+            ? "jdbc:postgresql" : "jdbc:mysql";
+        String url = String.format("%s://%s:%d/%s",
+            urlPrefix, dataSource.getHost(), dataSource.getPort(),
+            dataSource.getDatabaseName() != null ? dataSource.getDatabaseName() : "");
+
+        String password = getDecryptedPassword(dataSource);
+        java.util.Properties props = new java.util.Properties();
+        if (dataSource.getUsername() != null) props.setProperty("user", dataSource.getUsername());
+        if (password != null) props.setProperty("password", password);
+
+        try {
+            Class.forName(driverClass);
+            try (java.sql.Connection conn = java.sql.DriverManager.getConnection(url, props)) {
+                java.sql.DatabaseMetaData metaData = conn.getMetaData();
+                String catalog = "mysql".equals(type) ? dataSource.getDatabaseName() : null;
+                String schema = "postgresql".equals(type) ? "public" : null;
+                try (java.sql.ResultSet rs = metaData.getTables(catalog, schema, "%", new String[]{"TABLE"})) {
+                    List<String> tables = new java.util.ArrayList<>();
+                    while (rs.next()) {
+                        tables.add(rs.getString("TABLE_NAME"));
+                    }
+                    return tables;
+                }
+            }
+        } catch (Exception e) {
+            log.error("获取表名列表失败: {}", dataSource.getName(), e);
+            throw new BusinessException("获取表名列表失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取指定表的列信息（仅支持 JDBC 数据库）
+     *
+     * @param id 数据源ID
+     * @param tableName 表名
+     * @return 列信息列表
+     */
+    public List<java.util.Map<String, String>> getColumns(Long id, String tableName) {
+        DataSource dataSource = getDataSource(id);
+        String type = dataSource.getType();
+
+        if (!"postgresql".equals(type) && !"mysql".equals(type)) {
+            throw new BusinessException("当前仅支持 PostgreSQL 和 MySQL 数据源");
+        }
+
+        String driverClass = "postgresql".equals(type)
+            ? "org.postgresql.Driver" : "com.mysql.cj.jdbc.Driver";
+        String urlPrefix = "postgresql".equals(type)
+            ? "jdbc:postgresql" : "jdbc:mysql";
+        String url = String.format("%s://%s:%d/%s",
+            urlPrefix, dataSource.getHost(), dataSource.getPort(),
+            dataSource.getDatabaseName() != null ? dataSource.getDatabaseName() : "");
+
+        String password = getDecryptedPassword(dataSource);
+        java.util.Properties props = new java.util.Properties();
+        if (dataSource.getUsername() != null) props.setProperty("user", dataSource.getUsername());
+        if (password != null) props.setProperty("password", password);
+
+        try {
+            Class.forName(driverClass);
+            try (java.sql.Connection conn = java.sql.DriverManager.getConnection(url, props)) {
+                java.sql.DatabaseMetaData metaData = conn.getMetaData();
+                String catalog = "mysql".equals(type) ? dataSource.getDatabaseName() : null;
+                String schema = "postgresql".equals(type) ? "public" : null;
+                try (java.sql.ResultSet rs = metaData.getColumns(catalog, schema, tableName, "%")) {
+                    List<java.util.Map<String, String>> columns = new java.util.ArrayList<>();
+                    while (rs.next()) {
+                        java.util.Map<String, String> col = new java.util.HashMap<>();
+                        col.put("name", rs.getString("COLUMN_NAME"));
+                        col.put("type", rs.getString("TYPE_NAME"));
+                        col.put("nullable", String.valueOf(rs.getInt("NULLABLE") == java.sql.DatabaseMetaData.columnNullable));
+                        columns.add(col);
+                    }
+                    return columns;
+                }
+            }
+        } catch (Exception e) {
+            log.error("获取列信息失败: {}.{}", dataSource.getName(), tableName, e);
+            throw new BusinessException("获取列信息失败: " + e.getMessage());
+        }
+    }
 }

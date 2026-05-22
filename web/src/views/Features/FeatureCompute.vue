@@ -41,7 +41,8 @@
           </el-form-item>
 
           <el-form-item label="数据源类型">
-            <el-tag v-if="selectedView">{{ DataSourceTypeLabels[selectedView.dataSourceType] }}</el-tag>
+            <el-tag v-if="selectedView?.datasourceType">{{ DataSourceTypeLabels[selectedView.datasourceType] || selectedView.datasourceType }}</el-tag>
+            <span v-else-if="selectedView" class="placeholder">未配置</span>
             <span v-else class="placeholder">请先选择特征视图</span>
           </el-form-item>
 
@@ -428,7 +429,7 @@ const selectedView = computed(() => {
 /**
  * 处理特征视图变化
  */
-const handleFeatureViewChange = () => {
+const handleFeatureViewChange = async () => {
   // 重置后续步骤
   computeSteps.value.forEach(step => {
     step.status = 'waiting'
@@ -437,6 +438,21 @@ const handleFeatureViewChange = () => {
   computeLogs.value = []
   computeProgress.value = 0
   computeStatus.value = null
+
+  // 获取视图完整详情（包含特征列表）
+  const viewName = computeForm.value.featureViewName
+  if (viewName) {
+    try {
+      await featuresStore.fetchView(viewName)
+      // 将完整详情更新到 views 列表中，使 selectedView 能获取到 features
+      const index = featuresStore.views.findIndex(v => v.name === viewName)
+      if (index !== -1 && featuresStore.currentView) {
+        featuresStore.views[index] = featuresStore.currentView
+      }
+    } catch (error) {
+      console.error('加载视图详情失败:', error)
+    }
+  }
 }
 
 /**
@@ -465,9 +481,46 @@ const prevStep = () => {
 }
 
 /**
+ * 校验特征视图配置是否完整
+ */
+const validateViewConfig = () => {
+  const view = selectedView.value
+  if (!view) return '请先选择特征视图'
+  if (!view.features || view.features.length === 0) {
+    return `特征视图 "${view.name}" 没有配置任何特征，请先添加特征`
+  }
+  if (!view.sourceConfig) {
+    return `特征视图 "${view.name}" 没有配置数据源，请先编辑视图配置数据源`
+  }
+  let config = null
+  try {
+    config = JSON.parse(view.sourceConfig)
+  } catch (e) {
+    return `特征视图 "${view.name}" 的数据源配置格式错误`
+  }
+  if (!config.table) {
+    return `特征视图 "${view.name}" 缺少数据表配置，请先编辑视图选择数据表`
+  }
+  if (!config.entityColumn) {
+    return `特征视图 "${view.name}" 缺少实体字段配置，请先编辑视图选择实体字段`
+  }
+  if (!config.dateColumn) {
+    return `特征视图 "${view.name}" 缺少日期字段配置，请先编辑视图选择日期字段`
+  }
+  return null
+}
+
+/**
  * 开始计算
  */
 const startCompute = async () => {
+  // 前置校验
+  const errorMsg = validateViewConfig()
+  if (errorMsg) {
+    ElMessage.warning(errorMsg)
+    return
+  }
+
   try {
     currentStep.value = 2
 
@@ -485,12 +538,32 @@ const startCompute = async () => {
       step.timestamp = null
     })
 
+    // 构造FeatureDefinition
+    let sourceConfig = null
+    try {
+      if (selectedView.value.sourceConfig) {
+        sourceConfig = JSON.parse(selectedView.value.sourceConfig)
+      }
+    } catch (e) {
+      console.warn('解析sourceConfig失败:', e)
+    }
+
+    const definition = {
+      featureView: selectedView.value.name,
+      entity: selectedView.value.entity,
+      features: selectedView.value.features || [],
+      source: {
+        type: selectedView.value.datasourceType || 'postgresql',
+        config: sourceConfig || {}
+      }
+    }
+
     // 调用实际API
-    await featuresStore.computeFeatures({
-      definition: selectedView.value,
-      inputPath: computeForm.value.inputPath || null,
-      outputPath: computeForm.value.outputPath || null
-    })
+    await featuresStore.computeFeatures(
+      definition,
+      computeForm.value.inputPath || null,
+      computeForm.value.outputPath || null
+    )
 
     // 开始模拟计算过程（用于UI展示，实际应该从后端获取实时进度）
     simulateComputeProcess()

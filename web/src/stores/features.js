@@ -118,12 +118,22 @@ export const useFeaturesStore = defineStore('features', {
         }
 
         const response = await featuresApi.listFeatureViews(queryParams)
+        console.log('[fetchViews] response:', response)
 
-        if (response.code === '200') {
-          this.views = response.data.items || []
-          this.pagination.total = response.data.total || 0
+        const isSuccess = response.code === '200' || response.code === 200
+        if (isSuccess) {
+          // 兼容两种后端返回格式：直接数组 或 {items, total} 对象
+          const rawData = response.data
+          if (Array.isArray(rawData)) {
+            this.views = rawData
+            this.pagination.total = rawData.length
+          } else {
+            this.views = rawData?.items || []
+            this.pagination.total = rawData?.total || 0
+          }
           this.pagination.page = queryParams.page
           this.pagination.pageSize = queryParams.pageSize
+          console.log('[fetchViews] views loaded:', this.views.length, this.views)
         } else {
           throw new Error(response.message || '获取特征视图列表失败')
         }
@@ -270,14 +280,16 @@ export const useFeaturesStore = defineStore('features', {
 
     /**
      * 计算特征
-     * @param {Object} data - 计算请求参数
+     * @param {Object} definition - 特征定义
+     * @param {string} [inputPath] - 输入路径
+     * @param {string} [outputPath] - 输出路径
      */
-    async computeFeatures(data) {
+    async computeFeatures(definition, inputPath, outputPath) {
       try {
         this.loading.computing = true
         this.error = null
 
-        const response = await featuresApi.computeFeatures(data)
+        const response = await featuresApi.computeFeatures(definition, inputPath, outputPath)
 
         if (response.code !== '200') {
           throw new Error(response.message || '特征计算失败')

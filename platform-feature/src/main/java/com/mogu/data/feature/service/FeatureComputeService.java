@@ -6,6 +6,7 @@ import com.mogu.data.common.exception.BusinessException;
 import com.mogu.data.common.storage.MinioService;
 import com.mogu.data.common.storage.RedisService;
 import com.mogu.data.common.logger.Logger;
+import com.mogu.data.common.repository.DataSourceRepository;
 import com.mogu.data.feature.datasource.DataSourceAdapter;
 import com.mogu.data.feature.datasource.DataSourceFactory;
 import com.mogu.data.feature.datasource.DataSourceType;
@@ -45,6 +46,7 @@ public class FeatureComputeService {
     private final MinioService minioService;
     private final RedisService redisService;
     private final FeatureRegistryService featureRegistryService;
+    private final DataSourceRepository dataSourceRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -57,6 +59,9 @@ public class FeatureComputeService {
     public void computeFeatures(FeatureDefinition definition, String inputPath, String outputPath) {
         String featureViewName = definition.getFeatureView();
         LocalDate partitionDate = LocalDate.now(); // 默认使用今天
+        if (outputPath == null || outputPath.isEmpty()) {
+            outputPath = buildOutputPath(featureViewName, partitionDate);
+        }
         log.info("开始计算特征: {}, 输出路径: {}", featureViewName, outputPath);
 
         try {
@@ -64,8 +69,13 @@ public class FeatureComputeService {
             DataSourceType sourceType = DataSourceType.fromString(definition.getSource().getType());
             DataSourceAdapter adapter = dataSourceFactory.getAdapter(sourceType);
 
-            // 将Map配置转换为JSON字符串
-            String configJson = convertConfigToJson(definition.getSource().getConfig());
+            // 将Map配置转换为JSON字符串，并合并数据源连接信息
+            Map<String, Object> sourceConfig = definition.getSource().getConfig();
+            if (sourceConfig == null) {
+                sourceConfig = new HashMap<>();
+            }
+            enrichWithDataSourceConnection(sourceConfig, featureViewName);
+            String configJson = convertConfigToJson(sourceConfig);
 
             Map<String, List<Map<String, Object>>> rawData = adapter.readData(configJson, partitionDate);
 
@@ -400,6 +410,75 @@ public class FeatureComputeService {
         } catch (Exception e) {
             log.error("配置转换失败");
             throw new BusinessException("500", "配置转换失败", e);
+        }
+    }
+
+    /**
+     * 从特征视图关联的数据源中获取连接信息，合并到sourceConfig中
+     */
+    private void enrichWithDataSourceConnection(Map<String, Object> sourceConfig, String featureViewName) {
+        try {
+            com.mogu.data.feature.entity.FeatureView apiView = featureRegistryService.getFeatureView(featureViewName);
+            Long dsId = apiView.getDatasourceId();
+            if (dsId != null) {
+                com.mogu.data.common.entity.DataSource ds = dataSourceRepository.findById(dsId).orElse(null);
+                if (ds != null) {
+                    String jdbcUrl = buildJdbcUrl(ds);
+                    String password = decryptPassword(ds.getPasswordEncrypted());
+                    sourceConfig.put("jdbcUrl", jdbcUrl);
+                    sourceConfig.put("username", ds.getUsername());
+                    sourceConfig.put("password", password);
+                    sourceConfig.put("dbType", ds.getType());
+                    log.debug("Enriched source config with data source connection: {} ({})", ds.getName(), jdbcUrl);
+                } else {
+                    log.warn("Data source not found for id: {}", dsId);
+                }
+            } else {
+                log.warn("Feature view '{}' has no datasourceId, using default connection", featureViewName);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to enrich source config with data source connection: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 根据数据源信息构建 JDBC URL
+     */
+    private String buildJdbcUrl(com.mogu.data.common.entity.DataSource ds) {
+        String type = ds.getType();
+        String host = ds.getHost();
+        Integer port = ds.getPort();
+        String database = ds.getDatabaseName();
+
+        if ("mysql".equalsIgnoreCase(type)) {
+            return String.format("jdbc:mysql://%s:%d/%s?useSSL=false&serverTimezone=Asia/Shanghai",
+                host, port != null ? port : 3306, database);
+        } else if ("postgresql".equalsIgnoreCase(type)) {
+            return String.format("jdbc:postgresql://%s:%d/%s",
+                host, port != null ? port : 5432, database);
+        }
+
+        // 其他类型，尝试使用 host 作为完整 URL
+        if (host != null && host.startsWith("jdbc:")) {
+            return host;
+        }
+
+        log.warn("Unable to build JDBC URL for type: {}, host: {}", type, host);
+        return null;
+    }
+
+    /**
+     * 解密密码
+     */
+    private String decryptPassword(String encryptedPassword) {
+        if (encryptedPassword == null || encryptedPassword.isEmpty()) {
+            return null;
+        }
+        try {
+            return com.mogu.data.common.util.EncryptionUtil.decrypt(encryptedPassword);
+        } catch (Exception e) {
+            log.warn("Failed to decrypt password: {}", e.getMessage());
+            return null;
         }
     }
 

@@ -87,8 +87,8 @@ public class FeatureController {
      */
     @PostMapping("/compute")
     public Result<Void> computeFeatures(@RequestBody FeatureDefinition definition,
-                                         @RequestParam String inputPath,
-                                         @RequestParam String outputPath) {
+                                        @RequestParam(required = false) String inputPath,
+                                        @RequestParam(required = false) String outputPath) {
         featureComputeService.computeFeatures(definition, inputPath, outputPath);
         return Result.success();
     }
@@ -99,6 +99,28 @@ public class FeatureController {
     @PostMapping("/compute/batch")
     public Result<Void> batchComputeFeatures(@RequestBody List<FeatureDefinition> definitions) {
         featureComputeService.batchComputeFeatures(definitions);
+        return Result.success();
+    }
+
+    /**
+     * 获取特征视图的特征定义列表
+     */
+    @GetMapping("/views/{name}/definitions")
+    public Result<List<com.mogu.data.feature.entity.FeatureDefinition.FeatureSpec>> getFeatureDefinitions(
+            @PathVariable String name) {
+        List<com.mogu.data.feature.entity.FeatureDefinition.FeatureSpec> definitions =
+                featureRegistryService.getFeatureDefinitions(name);
+        return Result.success(definitions);
+    }
+
+    /**
+     * 删除特征定义
+     */
+    @DeleteMapping("/views/{name}/definitions/{featureName}")
+    public Result<Void> deleteFeatureDefinition(
+            @PathVariable String name,
+            @PathVariable String featureName) {
+        featureRegistryService.deleteFeatureDefinition(name, featureName);
         return Result.success();
     }
 
@@ -116,8 +138,8 @@ public class FeatureController {
      */
     @GetMapping("/online")
     public Result<Map<String, Object>> getOnlineFeatures(@RequestParam String entityType,
-                                                          @RequestParam String entityId,
-                                                          @RequestParam List<String> featureNames) {
+                                                         @RequestParam String entityId,
+                                                         @RequestParam List<String> featureNames) {
         Map<String, Object> features = featureComputeService.getOnlineFeatures(entityType, entityId, featureNames);
         return Result.success(features);
     }

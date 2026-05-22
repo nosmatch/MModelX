@@ -59,7 +59,7 @@ spring:
 
 # MinIO配置
 minio:
-  endpoint: http://localhost:9000
+  endpoint: http://localhost:9002
   access-key: minioadmin
   secret-key: minioadmin
   bucket-name: mmodelx
@@ -69,7 +69,7 @@ minio:
 mlflow:
   tracking-uri: http://localhost:5000
   registry-uri: http://localhost:5000
-  s3-endpoint-url: http://localhost:9000
+  s3-endpoint-url: http://localhost:9002
   access-key-id: minioadmin
   secret-access-key: minioadmin
   bucket-name: mlflow

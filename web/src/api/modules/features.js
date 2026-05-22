@@ -104,17 +104,17 @@ export function registerFeatureDefinition(definition) {
 
 /**
  * 计算特征
- * @param {Object} data - 计算请求参数
- * @param {Object} data.definition - 特征定义
- * @param {string} [data.inputPath] - 输入路径
- * @param {string} [data.outputPath] - 输出路径
+ * @param {Object} definition - 特征定义
+ * @param {string} [inputPath] - 输入路径
+ * @param {string} [outputPath] - 输出路径
  * @returns {Promise<{code: string, message: string}>}
  */
-export function computeFeatures(data) {
+export function computeFeatures(definition, inputPath, outputPath) {
   return request({
     url: '/features/compute',
     method: 'post',
-    data
+    data: definition,
+    params: { inputPath, outputPath }
   })
 }
 

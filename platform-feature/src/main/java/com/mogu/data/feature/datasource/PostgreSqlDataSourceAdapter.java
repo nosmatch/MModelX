@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mogu.data.common.logger.Logger;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -45,14 +46,28 @@ public class PostgreSqlDataSourceAdapter implements DataSourceAdapter {
             @SuppressWarnings("unchecked")
             List<String> columns = (List<String>) configMap.getOrDefault("columns", Collections.singletonList("*"));
 
+            // 校验必要字段
+            if (table == null || table.isEmpty()) {
+                throw new IllegalArgumentException("数据源配置缺少 'table' 字段，请在特征视图中配置数据表");
+            }
+            if (entityColumn == null || entityColumn.isEmpty()) {
+                throw new IllegalArgumentException("数据源配置缺少 'entityColumn' 字段，请在特征视图中配置实体字段");
+            }
+            if (dateColumn == null || dateColumn.isEmpty()) {
+                throw new IllegalArgumentException("数据源配置缺少 'dateColumn' 字段，请在特征视图中配置日期字段");
+            }
+
             // 构建SQL查询
             String sql = buildSelectQuery(table, columns, dateColumn, partitionDate);
 
             log.info("Executing SQL: {}", sql);
             log.debug("Reading from table: {} for date: {}", table, partitionDate);
 
+            // 根据配置解析目标 JdbcTemplate
+            JdbcTemplate targetTemplate = resolveJdbcTemplate(configMap);
+
             // 执行查询
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
+            List<Map<String, Object>> rows = targetTemplate.queryForList(sql);
 
             // 按entity_id分组
             Map<String, List<Map<String, Object>>> groupedData = new HashMap<>();
@@ -85,6 +100,39 @@ public class PostgreSqlDataSourceAdapter implements DataSourceAdapter {
             "SELECT %s FROM %s WHERE DATE(%s) = '%s' ORDER BY %s",
             columnList, table, dateColumn, partitionDate, dateColumn
         );
+    }
+
+    /**
+     * 根据配置解析目标 JdbcTemplate。
+     * 如果配置中包含 jdbcUrl、username、password，则动态创建连接；否则回退到默认 JdbcTemplate。
+     */
+    private JdbcTemplate resolveJdbcTemplate(Map<String, Object> configMap) {
+        String jdbcUrl = (String) configMap.get("jdbcUrl");
+        String username = (String) configMap.get("username");
+        String password = (String) configMap.get("password");
+
+        if (jdbcUrl != null && !jdbcUrl.isEmpty() && username != null) {
+            DriverManagerDataSource ds = new DriverManagerDataSource();
+            ds.setUrl(jdbcUrl);
+            ds.setUsername(username);
+            ds.setPassword(password);
+
+            // 根据 URL 前缀自动判断驱动类名
+            if (jdbcUrl.startsWith("jdbc:mysql:")) {
+                ds.setDriverClassName("com.mysql.cj.jdbc.Driver");
+                log.info("Using dynamic MySQL connection: {}", jdbcUrl);
+            } else if (jdbcUrl.startsWith("jdbc:postgresql:")) {
+                ds.setDriverClassName("org.postgresql.Driver");
+                log.info("Using dynamic PostgreSQL connection: {}", jdbcUrl);
+            } else {
+                log.warn("Unknown JDBC URL prefix, attempting with default driver: {}", jdbcUrl);
+            }
+
+            return new JdbcTemplate(ds);
+        }
+
+        log.debug("Using default JdbcTemplate (no dynamic connection config found)");
+        return jdbcTemplate;
     }
 
     @Override

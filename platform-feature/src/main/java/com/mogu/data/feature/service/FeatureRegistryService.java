@@ -1,13 +1,18 @@
 package com.mogu.data.feature.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mogu.data.common.entity.DataSource;
 import com.mogu.data.common.entity.Feature;
 import com.mogu.data.common.entity.FeatureView;
 import com.mogu.data.common.exception.BusinessException;
+import com.mogu.data.common.repository.DataSourceRepository;
 import com.mogu.data.feature.entity.FeatureDefinition;
 import com.mogu.data.feature.repository.FeatureRepository;
 import com.mogu.data.feature.repository.FeatureViewRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,11 +30,14 @@ import java.util.Optional;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 @Transactional
 public class FeatureRegistryService {
 
     private final FeatureViewRepository featureViewRepository;
     private final FeatureRepository featureRepository;
+    private final DataSourceRepository dataSourceRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * 获取特征视图
@@ -63,6 +71,38 @@ public class FeatureRegistryService {
         apiFeatureView.setDescription(dbFeatureView.getDescription());
         apiFeatureView.setVersion(Math.toIntExact(dbFeatureView.getId())); // 简化版本号
         apiFeatureView.setStatus(dbFeatureView.getStatus().name());
+        apiFeatureView.setCreatedAt(dbFeatureView.getCreatedAt());
+        apiFeatureView.setUpdatedAt(dbFeatureView.getUpdatedAt());
+
+        // 填充数据源关联信息
+        Long dsId = dbFeatureView.getDatasourceId();
+        if (dsId == null && dbFeatureView.getDatasource() != null) {
+            dsId = dbFeatureView.getDatasource().getId();
+        }
+        apiFeatureView.setDatasourceId(dsId);
+        if (dsId != null) {
+            if (dbFeatureView.getDatasource() != null) {
+                apiFeatureView.setDatasourceName(dbFeatureView.getDatasource().getName());
+                apiFeatureView.setDatasourceType(dbFeatureView.getDatasource().getType());
+            } else {
+                dataSourceRepository.findById(dsId)
+                    .ifPresent(ds -> {
+                        apiFeatureView.setDatasourceName(ds.getName());
+                        apiFeatureView.setDatasourceType(ds.getType());
+                    });
+            }
+        }
+        if (dbFeatureView.getSourceConfig() != null) {
+            apiFeatureView.setSourceConfig(dbFeatureView.getSourceConfig().toString());
+        }
+
+        // 加载该视图下的特征列表
+        List<Feature> features = featureRepository.findActiveFeaturesByViewId(dbFeatureView.getId());
+        apiFeatureView.setFeatures(
+            features.stream()
+                .map(this::convertToFeatureSpec)
+                .collect(java.util.stream.Collectors.toList())
+        );
 
         return apiFeatureView;
     }
@@ -105,6 +145,23 @@ public class FeatureRegistryService {
             dbFeatureView.setDescription(apiFeatureView.getDescription());
         }
 
+        // 更新数据源关联
+        if (apiFeatureView.getDatasourceId() != null) {
+            DataSource dataSource = dataSourceRepository.findById(apiFeatureView.getDatasourceId())
+                .orElseThrow(() -> new BusinessException("数据源不存在: " + apiFeatureView.getDatasourceId()));
+            dbFeatureView.setDatasourceId(apiFeatureView.getDatasourceId());
+            dbFeatureView.setDatasource(dataSource);
+        }
+
+        // 更新数据源使用配置
+        if (apiFeatureView.getSourceConfig() != null) {
+            try {
+                dbFeatureView.setSourceConfig(objectMapper.readTree(apiFeatureView.getSourceConfig()));
+            } catch (Exception e) {
+                throw new BusinessException("数据源配置JSON格式错误: " + e.getMessage());
+            }
+        }
+
         featureViewRepository.save(dbFeatureView);
     }
 
@@ -128,6 +185,23 @@ public class FeatureRegistryService {
         dbFeatureView.setDescription(apiFeatureView.getDescription());
         dbFeatureView.setStatus(FeatureView.FeatureViewStatus.DRAFT);
 
+        // 设置数据源关联
+        if (apiFeatureView.getDatasourceId() != null) {
+            DataSource dataSource = dataSourceRepository.findById(apiFeatureView.getDatasourceId())
+                .orElseThrow(() -> new BusinessException("数据源不存在: " + apiFeatureView.getDatasourceId()));
+            dbFeatureView.setDatasourceId(apiFeatureView.getDatasourceId());
+            dbFeatureView.setDatasource(dataSource);
+        }
+
+        // 设置数据源使用配置
+        if (apiFeatureView.getSourceConfig() != null && !apiFeatureView.getSourceConfig().isEmpty()) {
+            try {
+                dbFeatureView.setSourceConfig(objectMapper.readTree(apiFeatureView.getSourceConfig()));
+            } catch (Exception e) {
+                throw new BusinessException("数据源配置JSON格式错误: " + e.getMessage());
+            }
+        }
+
         FeatureView saved = featureViewRepository.save(dbFeatureView);
         return saved.getId();
     }
@@ -137,8 +211,10 @@ public class FeatureRegistryService {
      *
      * @return 特征视图列表
      */
+    @Transactional(readOnly = true)
     public List<com.mogu.data.feature.entity.FeatureView> listFeatureViews() {
         List<FeatureView> dbFeatureViews = featureViewRepository.findActiveFeatureViews();
+        log.info("FeatureView query returned {} records", dbFeatureViews.size());
 
         return dbFeatureViews.stream()
             .map(this::convertToApiFeatureView)
@@ -201,20 +277,14 @@ public class FeatureRegistryService {
             feature.setStatus(Feature.FeatureStatus.DRAFT);
 
             // 构建配置JSON（包含transformExpr和defaultValue）
-            StringBuilder configJson = new StringBuilder("{");
+            com.fasterxml.jackson.databind.node.ObjectNode configNode = objectMapper.createObjectNode();
             if (featureSpec.getTransformExpr() != null) {
-                configJson.append("\"transformExpr\":\"")
-                    .append(escapeJson(featureSpec.getTransformExpr())).append("\"");
+                configNode.put("transformExpr", featureSpec.getTransformExpr());
             }
             if (featureSpec.getDefaultValue() != null) {
-                if (configJson.length() > 1) {
-                    configJson.append(",");
-                }
-                configJson.append("\"defaultValue\":")
-                    .append(mapToJson(featureSpec.getDefaultValue()));
+                configNode.set("defaultValue", objectMapper.valueToTree(featureSpec.getDefaultValue()));
             }
-            configJson.append("}");
-            feature.setConfig(configJson.toString());
+            feature.setConfig(configNode);
 
             // 保存到数据库
             featureRepository.save(feature);
@@ -223,47 +293,7 @@ public class FeatureRegistryService {
         return featureDefinition;
     }
 
-    /**
-     * 转义JSON字符串
-     */
-    private String escapeJson(String str) {
-        return str.replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t");
-    }
-
-    /**
-     * 将Map转换为JSON字符串（简化实现）
-     */
-    private String mapToJson(java.util.Map<String, Object> map) {
-        if (map == null || map.isEmpty()) {
-            return "{}";
-        }
-
-        StringBuilder json = new StringBuilder("{");
-        boolean first = true;
-        for (java.util.Map.Entry<String, Object> entry : map.entrySet()) {
-            if (!first) {
-                json.append(",");
-            }
-            json.append("\"").append(escapeJson(entry.getKey())).append("\":");
-            Object value = entry.getValue();
-            if (value instanceof String) {
-                json.append("\"").append(escapeJson((String) value)).append("\"");
-            } else if (value instanceof Number || value instanceof Boolean) {
-                json.append(value);
-            } else {
-                json.append("\"").append(escapeJson(String.valueOf(value))).append("\"");
-            }
-            first = false;
-        }
-        json.append("}");
-        return json.toString();
-    }
-
-    /**
+/**
      * 转换数据库实体为API实体
      *
      * @param dbFeatureView 数据库特征视图
@@ -280,6 +310,30 @@ public class FeatureRegistryService {
         apiFeatureView.setDescription(dbFeatureView.getDescription());
         apiFeatureView.setVersion(Math.toIntExact(dbFeatureView.getId()));
         apiFeatureView.setStatus(dbFeatureView.getStatus().name());
+        apiFeatureView.setCreatedAt(dbFeatureView.getCreatedAt());
+        apiFeatureView.setUpdatedAt(dbFeatureView.getUpdatedAt());
+
+        // 填充数据源关联信息（优先使用直接映射的列值）
+        Long dsId = dbFeatureView.getDatasourceId();
+        if (dsId == null && dbFeatureView.getDatasource() != null) {
+            dsId = dbFeatureView.getDatasource().getId();
+        }
+        apiFeatureView.setDatasourceId(dsId);
+        if (dsId != null) {
+            if (dbFeatureView.getDatasource() != null) {
+                apiFeatureView.setDatasourceName(dbFeatureView.getDatasource().getName());
+                apiFeatureView.setDatasourceType(dbFeatureView.getDatasource().getType());
+            } else {
+                dataSourceRepository.findById(dsId)
+                    .ifPresent(ds -> {
+                        apiFeatureView.setDatasourceName(ds.getName());
+                        apiFeatureView.setDatasourceType(ds.getType());
+                    });
+            }
+        }
+        if (dbFeatureView.getSourceConfig() != null) {
+            apiFeatureView.setSourceConfig(dbFeatureView.getSourceConfig().toString());
+        }
 
         return apiFeatureView;
     }
@@ -381,12 +435,14 @@ public class FeatureRegistryService {
         // 从config中解析transformExpr和defaultValue
         if (feature.getConfig() != null) {
             try {
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                Map<String, Object> config = mapper.readValue(feature.getConfig(),
-                    new TypeReference<Map<String, Object>>() {});
-
-                spec.setTransformExpr((String) config.get("transformExpr"));
-                spec.setDefaultValue((Map<String, Object>) config.get("defaultValue"));
+                com.fasterxml.jackson.databind.JsonNode config = feature.getConfig();
+                if (config.has("transformExpr")) {
+                    spec.setTransformExpr(config.get("transformExpr").asText());
+                }
+                if (config.has("defaultValue")) {
+                    spec.setDefaultValue(objectMapper.readValue(config.get("defaultValue").toString(),
+                        new TypeReference<Map<String, Object>>() {}));
+                }
             } catch (Exception e) {
                 // 忽略解析错误
             }

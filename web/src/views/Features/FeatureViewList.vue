@@ -105,16 +105,29 @@
         </template>
       </el-table-column>
 
-      <!-- 数据源类型 -->
+      <!-- 数据源 -->
       <el-table-column
-        prop="dataSourceType"
+        prop="datasourceName"
         label="数据源"
-        width="120"
+        width="150"
       >
         <template #default="{ row }">
-          <el-tag size="small">
-            {{ DataSourceTypeLabels[row.dataSourceType] || row.dataSourceType }}
+          <el-tag v-if="row.datasourceName" size="small" type="primary">
+            {{ row.datasourceName }}
           </el-tag>
+          <span v-else-if="row.datasourceId" class="text-muted">ID:{{ row.datasourceId }}</span>
+          <span v-else class="text-muted">-</span>
+        </template>
+      </el-table-column>
+
+      <!-- 数据表 -->
+      <el-table-column
+        label="数据表"
+        width="150"
+      >
+        <template #default="{ row }">
+          <span v-if="getTableName(row)">{{ getTableName(row) }}</span>
+          <span v-else class="text-muted">-</span>
         </template>
       </el-table-column>
 
@@ -267,8 +280,7 @@ import { useFeaturesStore } from '@/stores/features'
 import {
   FeatureViewStatusOptions,
   FeatureViewStatusLabels,
-  FeatureViewStatusColors,
-  DataSourceTypeLabels
+  FeatureViewStatusColors
 } from '@/constants/features'
 import FeatureViewDialog from './FeatureViewDialog.vue'
 
@@ -481,6 +493,21 @@ const handleDialogSave = async (data) => {
     await loadViews()
   } catch (error) {
     ElMessage.error('保存失败: ' + error.message)
+  }
+}
+
+/**
+ * 从 sourceConfig 中解析数据表名
+ */
+const getTableName = (row) => {
+  if (!row.sourceConfig) return null
+  try {
+    const config = typeof row.sourceConfig === 'string'
+      ? JSON.parse(row.sourceConfig)
+      : row.sourceConfig
+    return config.table || null
+  } catch (e) {
+    return null
   }
 }
 
