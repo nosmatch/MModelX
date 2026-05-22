@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -158,12 +159,14 @@ public class FeatureController {
 
     /**
      * 获取在线特征
+     * featureNames 支持逗号分隔的字符串（如 "a,b,c"）或重复参数
      */
     @GetMapping("/online")
     public Result<Map<String, Object>> getOnlineFeatures(@RequestParam String entityType,
                                                          @RequestParam String entityId,
-                                                         @RequestParam List<String> featureNames) {
-        Map<String, Object> features = featureComputeService.getOnlineFeatures(entityType, entityId, featureNames);
+                                                         @RequestParam String featureNames) {
+        List<String> names = Arrays.asList(featureNames.split(","));
+        Map<String, Object> features = featureComputeService.getOnlineFeatures(entityType, entityId, names);
         return Result.success(features);
     }
 

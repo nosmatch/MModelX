@@ -342,6 +342,14 @@ public class FeatureRegistryService {
             apiFeatureView.setSourceConfig(dbFeatureView.getSourceConfig().toString());
         }
 
+        // 加载该视图下的特征列表
+        List<Feature> features = featureRepository.findActiveFeaturesByViewId(dbFeatureView.getId());
+        apiFeatureView.setFeatures(
+            features.stream()
+                .map(this::convertToFeatureSpec)
+                .collect(java.util.stream.Collectors.toList())
+        );
+
         return apiFeatureView;
     }
 

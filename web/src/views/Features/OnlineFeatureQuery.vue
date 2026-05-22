@@ -335,20 +335,30 @@
           v-for="(bookmark, index) in bookmarks"
           :key="index"
           class="bookmark-item"
+          @click="restoreFromBookmark(bookmark)"
         >
           <div class="bookmark-header">
             <div class="bookmark-name">
               <el-icon class="icon" color="#f5a623"><Star /></el-icon>
               {{ bookmark.name }}
             </div>
-            <el-button
-              size="small"
-              type="danger"
-              :icon="Delete"
-              @click="deleteBookmark(index)"
-            >
-              删除
-            </el-button>
+            <div class="bookmark-actions">
+              <el-button
+                size="small"
+                type="primary"
+                @click.stop="restoreFromBookmark(bookmark)"
+              >
+                使用
+              </el-button>
+              <el-button
+                size="small"
+                type="danger"
+                :icon="Delete"
+                @click.stop="deleteBookmark(index)"
+              >
+                删除
+              </el-button>
+            </div>
           </div>
           <div class="bookmark-body">
             <div class="bookmark-info">
@@ -416,7 +426,7 @@
  * @author MModelX Team
  * @since 2026-05-20
  */
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   Search,
@@ -430,6 +440,24 @@ import {
   Calendar
 } from '@element-plus/icons-vue'
 import { useFeaturesStore } from '@/stores/features'
+
+// ==================== localStorage 工具 ====================
+const loadFromStorage = (key, defaultValue) => {
+  try {
+    const stored = localStorage.getItem(key)
+    return stored ? JSON.parse(stored) : defaultValue
+  } catch {
+    return defaultValue
+  }
+}
+
+const saveToStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch (e) {
+    console.warn('保存到 localStorage 失败:', e)
+  }
+}
 
 // ==================== Store ====================
 const featuresStore = useFeaturesStore()
@@ -450,14 +478,30 @@ const selectedFeatureView = ref('')
 // 可用特征列表
 const availableFeatures = ref([])
 
-// 常用特征
-const commonFeatures = ref([
-  { name: 'total_orders', label: '总订单数', dtype: 'INT64' },
-  { name: 'avg_order_value', label: '平均订单金额', dtype: 'FLOAT64' },
-  { name: 'last_order_days', label: '最后订单天数', dtype: 'INT64' },
-  { name: 'is_active', label: '是否活跃', dtype: 'BOOLEAN' },
-  { name: 'user_level', label: '用户等级', dtype: 'STRING' }
-])
+// 常用特征（从可用特征动态生成）
+const commonFeatures = computed(() => {
+  if (availableFeatures.value.length === 0) {
+    // 没有选择特征视图时，从所有视图中收集特征
+    const allFeatures = []
+    for (const view of activeViews.value) {
+      if (view.features) {
+        for (const f of view.features) {
+          allFeatures.push({
+            name: f.name,
+            label: f.name,
+            dtype: f.dtype
+          })
+        }
+      }
+    }
+    return allFeatures
+  }
+  return availableFeatures.value.map(f => ({
+    name: f.key,
+    label: f.label,
+    dtype: f.dtype
+  }))
+})
 
 // 常用实体类型
 const commonEntityTypes = ref([
@@ -467,18 +511,14 @@ const commonEntityTypes = ref([
   { value: 'session_id', label: '会话ID' }
 ])
 
-// 查询历史
-const queryHistory = ref([])
+// 查询历史（localStorage 持久化）
+const QUERY_HISTORY_KEY = 'mmodelx_query_history'
+const queryHistory = ref(loadFromStorage(QUERY_HISTORY_KEY, []))
 const showHistory = ref(false)
 
-// 收藏夹
-const bookmarks = ref([
-  {
-    name: '用户基础特征',
-    entityType: 'user_id',
-    featureNames: ['total_orders', 'avg_order_value', 'last_order_days']
-  }
-])
+// 收藏夹（localStorage 持久化）
+const BOOKMARKS_KEY = 'mmodelx_bookmarks'
+const bookmarks = ref(loadFromStorage(BOOKMARKS_KEY, []))
 const showBookmarkDialog = ref(false)
 const showSaveBookmarkDialog = ref(false)
 const bookmarkForm = ref({
@@ -526,8 +566,10 @@ const featureTableData = computed(() => {
  * 处理特征视图变化
  */
 const handleViewChange = (viewName) => {
+  queryForm.value.featureNames = []
+
   if (!viewName) {
-    availableFeatures.value = []
+    loadAllFeatures()
     return
   }
 
@@ -540,6 +582,30 @@ const handleViewChange = (viewName) => {
       disabled: false
     }))
   }
+}
+
+/**
+ * 加载所有特征（跨所有视图）
+ */
+const loadAllFeatures = () => {
+  const allFeatures = []
+  const seen = new Set()
+  for (const view of activeViews.value) {
+    if (view.features) {
+      for (const f of view.features) {
+        if (!seen.has(f.name)) {
+          seen.add(f.name)
+          allFeatures.push({
+            key: f.name,
+            label: f.name,
+            dtype: f.dtype,
+            disabled: false
+          })
+        }
+      }
+    }
+  }
+  availableFeatures.value = allFeatures
 }
 
 /**
@@ -606,24 +672,7 @@ const handleQuery = async () => {
     ElMessage.success(`查询成功，获取到 ${Object.keys(features).length} 个特征`)
   } catch (error) {
     ElMessage.error('查询失败: ' + error.message)
-
-    // 模拟数据（用于演示）
-    queryResult.value = {
-      entityType: queryForm.value.entityType,
-      entityId: queryForm.value.entityId,
-      features: {
-        total_orders: 42,
-        avg_order_value: 158.5,
-        last_order_days: 3,
-        is_active: true,
-        user_level: 'VIP',
-        favorite_categories: ['electronics', 'books'],
-        registration_date: '2023-01-15'
-      },
-      fromCache: false,
-      elapsedTime: 125,
-      timestamp: Date.now()
-    }
+    queryResult.value = null
   } finally {
     querying.value = false
   }
@@ -644,6 +693,8 @@ const addToHistory = () => {
   if (queryHistory.value.length > 50) {
     queryHistory.value = queryHistory.value.slice(0, 50)
   }
+
+  saveToStorage(QUERY_HISTORY_KEY, queryHistory.value)
 }
 
 /**
@@ -659,10 +710,23 @@ const restoreFromHistory = (item) => {
 }
 
 /**
+ * 从收藏夹恢复
+ */
+const restoreFromBookmark = (bookmark) => {
+  queryForm.value.entityType = bookmark.entityType
+  queryForm.value.entityId = ''
+  queryForm.value.featureNames = [...bookmark.featureNames]
+
+  showBookmarkDialog.value = false
+  ElMessage.success('已从收藏夹恢复查询条件')
+}
+
+/**
  * 删除历史记录
  */
 const deleteHistoryItem = (index) => {
   queryHistory.value.splice(index, 1)
+  saveToStorage(QUERY_HISTORY_KEY, queryHistory.value)
 }
 
 /**
@@ -670,6 +734,7 @@ const deleteHistoryItem = (index) => {
  */
 const clearHistory = () => {
   queryHistory.value = []
+  saveToStorage(QUERY_HISTORY_KEY, queryHistory.value)
   ElMessage.success('查询历史已清空')
 }
 
@@ -701,6 +766,7 @@ const confirmSaveBookmark = () => {
     featureNames: [...queryForm.value.featureNames]
   })
 
+  saveToStorage(BOOKMARKS_KEY, bookmarks.value)
   showSaveBookmarkDialog.value = false
   ElMessage.success('已保存到收藏夹')
 }
@@ -710,6 +776,7 @@ const confirmSaveBookmark = () => {
  */
 const deleteBookmark = (index) => {
   bookmarks.value.splice(index, 1)
+  saveToStorage(BOOKMARKS_KEY, bookmarks.value)
 }
 
 /**
@@ -832,6 +899,12 @@ const formatDateTime = (timestamp) => {
   const seconds = String(date.getSeconds()).padStart(2, '0')
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
+
+// ==================== 生命周期 ====================
+onMounted(async () => {
+  await featuresStore.fetchViews()
+  loadAllFeatures()
+})
 </script>
 
 <style scoped lang="scss">
@@ -1046,6 +1119,11 @@ const formatDateTime = (timestamp) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+}
+
+.bookmark-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .entity-info {
