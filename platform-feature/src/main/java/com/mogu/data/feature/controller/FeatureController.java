@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -46,9 +47,12 @@ public class FeatureController {
      * 列出所有特征视图
      */
     @GetMapping("/views")
-    public Result<List<FeatureView>> listFeatureViews() {
+    public Result<Map<String, Object>> listFeatureViews() {
         List<FeatureView> featureViews = featureRegistryService.listFeatureViews();
-        return Result.success(featureViews);
+        Map<String, Object> result = new HashMap<>();
+        result.put("items", featureViews);
+        result.put("total", featureViews.size());
+        return Result.success(result);
     }
 
     /**

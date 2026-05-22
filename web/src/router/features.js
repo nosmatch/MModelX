@@ -19,7 +19,7 @@ export default [
   {
     path: '/features/views',
     name: 'FeatureViewList',
-    component: () => import('@/views/features/FeatureViewList.vue'),
+    component: () => import('@/views/Features/FeatureViewList.vue'),
     meta: {
       title: '特征视图',
       icon: 'Document',
@@ -30,7 +30,7 @@ export default [
   {
     path: '/features/compute',
     name: 'FeatureCompute',
-    component: () => import('@/views/features/FeatureCompute.vue'),
+    component: () => import('@/views/Features/FeatureCompute.vue'),
     meta: {
       title: '特征计算',
       icon: 'Operation',
@@ -40,7 +40,7 @@ export default [
   {
     path: '/features/materialize',
     name: 'FeatureMaterialize',
-    component: () => import('@/views/features/FeatureMaterialize.vue'),
+    component: () => import('@/views/Features/FeatureMaterialize.vue'),
     meta: {
       title: '特征物化',
       icon: 'Files',
@@ -50,7 +50,7 @@ export default [
   {
     path: '/features/online',
     name: 'OnlineFeatureQuery',
-    component: () => import('@/views/features/OnlineFeatureQuery.vue'),
+    component: () => import('@/views/Features/OnlineFeatureQuery.vue'),
     meta: {
       title: '在线查询',
       icon: 'Search',
@@ -60,7 +60,7 @@ export default [
   {
     path: '/features/visualization',
     name: 'FeatureVisualization',
-    component: () => import('@/views/features/FeatureVisualization.vue'),
+    component: () => import('@/views/Features/FeatureVisualization.vue'),
     meta: {
       title: '特征可视化',
       icon: 'DataAnalysis',
@@ -70,7 +70,7 @@ export default [
   {
     path: '/features/views/:name',
     name: 'FeatureViewDetail',
-    component: () => import('@/views/features/FeatureViewDetail.vue'),
+    component: () => import('@/views/Features/FeatureViewDetail.vue'),
     meta: {
       title: '视图详情',
       icon: 'Document',

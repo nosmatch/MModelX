@@ -111,8 +111,8 @@
             <!-- 数据源选择 -->
             <el-form-item label="数据来源" style="margin-top: 16px;">
               <el-radio-group v-model="materializeForm.sourceType">
-                <el-radio label="minio">从MinIO读取（离线特征）</el-radio>
-                <el-radio label="compute">重新计算</el-radio>
+                <el-radio value="minio">从MinIO读取（离线特征）</el-radio>
+                <el-radio value="compute">重新计算</el-radio>
               </el-radio-group>
             </el-form-item>
 
@@ -396,8 +396,8 @@
       <el-form :model="cleanupForm" label-width="120px">
         <el-form-item label="清理范围">
           <el-radio-group v-model="cleanupForm.scope">
-            <el-radio label="expired">仅清理已过期</el-radio>
-            <el-radio label="all">清理所有特征</el-radio>
+            <el-radio value="expired">仅清理已过期</el-radio>
+            <el-radio value="all">清理所有特征</el-radio>
           </el-radio-group>
         </el-form-item>
 

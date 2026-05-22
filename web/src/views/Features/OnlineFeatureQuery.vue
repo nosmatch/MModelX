@@ -125,7 +125,7 @@
                     <el-checkbox
                       v-for="feature in commonFeatures"
                       :key="feature.name"
-                      :label="feature.name"
+                      :value="feature.name"
                     >
                       <span class="checkbox-label">{{ feature.label }}</span>
                       <el-tag size="small" type="info">{{ feature.dtype }}</el-tag>

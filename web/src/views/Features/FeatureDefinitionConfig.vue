@@ -589,7 +589,7 @@ const parseTransformType = (expr) => {
  * 解析Transform字段
  */
 const parseTransformColumn = (expr) => {
-  const match = expr(/\(([^)]+)\)/)
+  const match = expr.match(/\(([^)]+)\)/)
   return match ? match[1] : ''
 }
 

@@ -326,6 +326,7 @@ import {
   Edit
 } from '@element-plus/icons-vue'
 import MonacoEditor from '@/components/MonacoEditor.vue'
+import { useFeaturesStore } from '@/stores/features'
 import {
   DataSourceTypeOptions,
   CommonEntityTypes,
@@ -337,6 +338,9 @@ import {
   RedisConfigTemplate,
   KafkaConfigTemplate
 } from '@/constants/features'
+
+// ==================== Store ====================
+const featuresStore = useFeaturesStore()
 
 // ==================== Props ====================
 const props = defineProps({
