@@ -52,6 +52,14 @@ public interface DataSourceRepository extends JpaRepository<DataSource, Long> {
     List<DataSource> findByStatusOrderByCreatedAtDesc(DataSource.DataSourceStatus status);
 
     /**
+     * 查找所有非归档状态的数据源，按创建时间倒序
+     *
+     * @return 非归档的数据源列表（ACTIVE, DISABLED, ERROR）
+     */
+    @Query("SELECT ds FROM DataSource ds WHERE ds.status <> 'ARCHIVED' ORDER BY ds.createdAt DESC")
+    List<DataSource> findAllNonArchivedOrderByCreatedAtDesc();
+
+    /**
      * 根据类型和状态查找数据源
      *
      * @param type 数据源类型

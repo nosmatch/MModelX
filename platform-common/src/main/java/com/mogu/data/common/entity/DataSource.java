@@ -100,8 +100,8 @@ public class DataSource {
      * - API 认证方式
      * - MinIO bucket 配置
      */
+    @org.hibernate.annotations.Type(type = "com.mogu.data.common.util.JsonbType")
     @Column(columnDefinition = "jsonb")
-    @Convert(converter = com.mogu.data.common.util.JsonNodeConverter.class)
     private JsonNode properties;
 
     // ==================== 状态管理 ====================

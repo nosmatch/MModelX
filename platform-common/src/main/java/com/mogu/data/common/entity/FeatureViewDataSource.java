@@ -1,8 +1,6 @@
 package com.mogu.data.common.entity;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Data;
-import org.hibernate.annotations.Type;
 
 import javax.persistence.*;
 import java.time.LocalDateTime;
@@ -71,9 +69,8 @@ public class FeatureViewDataSource {
      *   "dataPath": "data.items"
      * }
      */
-    @Column(columnDefinition = "jsonb", nullable = false)
-    @Convert(converter = com.mogu.data.common.util.JsonNodeConverter.class)
-    private JsonNode config;
+    @Column(columnDefinition = "TEXT", nullable = false)
+    private String config;
 
     /**
      * 是否为主数据源
@@ -112,17 +109,15 @@ public class FeatureViewDataSource {
      * 获取配置中的某个字段值
      */
     public String getConfigValue(String key) {
-        if (config == null || !config.has(key)) {
+        if (config == null || config.isEmpty()) return null;
+        try {
+            com.fasterxml.jackson.databind.JsonNode node =
+                new com.fasterxml.jackson.databind.ObjectMapper().readTree(config).get(key);
+            if (node == null || node.isNull()) return null;
+            return node.isTextual() ? node.asText() : node.toString();
+        } catch (Exception e) {
             return null;
         }
-        JsonNode node = config.get(key);
-        if (node == null || node.isNull()) {
-            return null;
-        }
-        if (node.isTextual()) {
-            return node.asText();
-        }
-        return node.toString();
     }
 
     /**

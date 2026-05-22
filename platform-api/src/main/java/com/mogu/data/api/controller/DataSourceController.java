@@ -34,16 +34,16 @@ public class DataSourceController {
     private final DataSourceService dataSourceService;
 
     /**
-     * 获取所有数据源
+     * 获取所有非归档数据源
      *
      * GET /api/v1/datasources
      *
-     * @return 所有激活状态的数据源列表
+     * @return 所有非归档状态（ACTIVE、DISABLED、ERROR）的数据源列表
      */
     @GetMapping
     public Result<List<DataSource>> listDataSources() {
-        log.info("Listing all datasources");
-        List<DataSource> datasources = dataSourceService.getActiveDataSources();
+        log.info("Listing all non-archived datasources");
+        List<DataSource> datasources = dataSourceService.getAllDataSources();
         return Result.success(datasources);
     }
 
@@ -161,7 +161,9 @@ public class DataSourceController {
         if (result) {
             return Result.success(result, "连接测试成功");
         } else {
-            return Result.error("连接测试失败");
+            DataSource ds = dataSourceService.getDataSource(id);
+            String errorMsg = ds.getLastErrorMessage();
+            return Result.error(errorMsg != null ? errorMsg : "连接测试失败");
         }
     }
 

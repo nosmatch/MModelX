@@ -34,6 +34,12 @@ const routes = [
         name: 'Serving',
         component: () => import('@/views/Serving/index.vue'),
         meta: { title: '模型部署' }
+      },
+      {
+        path: '/datasources',
+        name: 'DataSources',
+        component: () => import('@/views/DataSources/DataSourceList.vue'),
+        meta: { title: '数据源管理' }
       }
     ]
   },

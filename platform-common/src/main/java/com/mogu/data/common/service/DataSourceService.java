@@ -1,6 +1,5 @@
 package com.mogu.data.common.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.mogu.data.common.entity.DataSource;
 import com.mogu.data.common.entity.FeatureView;
 import com.mogu.data.common.entity.FeatureViewDataSource;
@@ -194,14 +193,12 @@ public class DataSourceService {
     }
 
     /**
-     * 获取所有激活的数据源
+     * 获取所有非归档的数据源（包括 ACTIVE、DISABLED、ERROR）
      *
-     * @return 激活的数据源列表
+     * @return 数据源列表
      */
-    public List<DataSource> getActiveDataSources() {
-        return dataSourceRepository.findByStatusOrderByCreatedAtDesc(
-            DataSource.DataSourceStatus.ACTIVE
-        );
+    public List<DataSource> getAllDataSources() {
+        return dataSourceRepository.findAllNonArchivedOrderByCreatedAtDesc();
     }
 
     /**
@@ -238,16 +235,13 @@ public class DataSourceService {
         DataSource dataSource = getDataSource(id);
 
         try {
-            // TODO: 调用相应的适配器测试连接
-            // 这里需要注入 DataSourceFactory 或各个适配器
-            // 暂时实现：简单地返回成功（实际应该调用适配器的 testConnection 方法）
-
-            boolean result = doTestConnection(dataSource);
+            String errorMsg = doTestConnection(dataSource);
+            boolean result = errorMsg == null;
 
             // 更新测试结果
             dataSource.setLastTestedAt(LocalDateTime.now());
             dataSource.setLastTestResult(result);
-            dataSource.setLastErrorMessage(result ? null : "测试连接功能待实现");
+            dataSource.setLastErrorMessage(result ? null : errorMsg);
 
             if (result) {
                 // 如果测试成功，确保状态为 ACTIVE
@@ -258,7 +252,7 @@ public class DataSourceService {
             } else {
                 // 如果测试失败，设置为 ERROR 状态
                 dataSource.setStatus(DataSource.DataSourceStatus.ERROR);
-                log.warn("Connection test failed for datasource: {}", dataSource.getName());
+                log.warn("Connection test failed for datasource: {} - {}", dataSource.getName(), errorMsg);
             }
 
             dataSourceRepository.save(dataSource);
@@ -281,38 +275,143 @@ public class DataSourceService {
 
     /**
      * 执行实际的连接测试
-     *
-     * TODO: 实现真正的连接测试逻辑
-     * - 根据数据源类型调用相应的适配器
-     * - PostgreSQL: 使用 JdbcTemplate 执行 SELECT 1
-     * - Redis: 使用 RedisTemplate 执行 PING
-     * - API: 使用 RestTemplate 发送测试请求
-     * - Kafka: 创建 Consumer 测试连接
-     *
-     * @param dataSource 数据源对象
-     * @return 是否连接成功
+     * @return null 表示成功，非 null 表示错误信息
      */
-    private boolean doTestConnection(DataSource dataSource) {
-        // 暂时实现：简单地检查配置是否完整
-        // 实际应该调用 DataSourceAdapter 接口的 testConnection 方法
-
+    private String doTestConnection(DataSource dataSource) {
         switch (dataSource.getType()) {
             case "postgresql":
             case "mysql":
-                // 检查必要字段
-                return dataSource.getHost() != null
-                    && dataSource.getPort() != null
-                    && dataSource.getDatabaseName() != null;
-
+                return testJdbcConnection(dataSource);
             case "redis":
-                return dataSource.getHost() != null
-                    && dataSource.getPort() != null;
-
+                return testRedisConnection(dataSource);
             case "api":
-                return dataSource.getHost() != null;
-
+                return testHttpConnection(dataSource);
             default:
-                return true; // 其他类型暂时返回 true
+                // minio / kafka / local_file：仅校验必填字段
+                return dataSource.getHost() != null ? null : "缺少 host 配置";
+        }
+    }
+
+    /**
+     * JDBC 连接测试（PostgreSQL / MySQL）
+     * @return null 表示成功，非 null 表示错误信息
+     */
+    private String testJdbcConnection(DataSource dataSource) {
+        String driverClass = "postgresql".equals(dataSource.getType())
+            ? "org.postgresql.Driver" : "com.mysql.cj.jdbc.Driver";
+        String urlPrefix = "postgresql".equals(dataSource.getType())
+            ? "jdbc:postgresql" : "jdbc:mysql";
+
+        if (dataSource.getHost() == null) {
+            return "缺少 host 配置";
+        }
+        if (dataSource.getPort() == null) {
+            return "缺少 port 配置";
+        }
+
+        String url = String.format("%s://%s:%d/%s",
+            urlPrefix, dataSource.getHost(), dataSource.getPort(),
+            dataSource.getDatabaseName() != null ? dataSource.getDatabaseName() : "");
+
+        String password = null;
+        if (dataSource.getPasswordEncrypted() != null) {
+            try {
+                password = EncryptionUtil.decrypt(dataSource.getPasswordEncrypted());
+            } catch (Exception e) {
+                log.warn("Password decryption failed for datasource: {}", dataSource.getName());
+                return "密码解密失败: " + e.getMessage();
+            }
+        }
+
+        java.util.Properties props = new java.util.Properties();
+        if (dataSource.getUsername() != null) props.setProperty("user", dataSource.getUsername());
+        if (password != null) props.setProperty("password", password);
+        props.setProperty("connectTimeout", "5");
+        props.setProperty("loginTimeout", "5");
+
+        try {
+            Class.forName(driverClass);
+            try (java.sql.Connection conn = java.sql.DriverManager.getConnection(url, props)) {
+                try (java.sql.Statement stmt = conn.createStatement()) {
+                    stmt.execute("SELECT 1");
+                }
+            }
+            return null;
+        } catch (ClassNotFoundException e) {
+            log.warn("JDBC driver not found for {}: {}", dataSource.getName(), driverClass);
+            return "缺少 JDBC 驱动: " + driverClass;
+        } catch (Exception e) {
+            log.warn("JDBC connection test failed for {}: {}", dataSource.getName(), e.getMessage());
+            return "连接失败: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Redis 连接测试（使用 Lettuce）
+     * @return null 表示成功，非 null 表示错误信息
+     */
+    private String testRedisConnection(DataSource dataSource) {
+        String password = null;
+        if (dataSource.getPasswordEncrypted() != null) {
+            try {
+                password = EncryptionUtil.decrypt(dataSource.getPasswordEncrypted());
+            } catch (Exception e) {
+                return "密码解密失败: " + e.getMessage();
+            }
+        }
+
+        if (dataSource.getHost() == null) {
+            return "缺少 host 配置";
+        }
+
+        int port = dataSource.getPort() != null ? dataSource.getPort() : 6379;
+        io.lettuce.core.RedisClient client = null;
+        try {
+            io.lettuce.core.RedisURI.Builder builder = io.lettuce.core.RedisURI.builder()
+                .withHost(dataSource.getHost())
+                .withPort(port)
+                .withTimeout(java.time.Duration.ofSeconds(5));
+            if (password != null && !password.isEmpty()) {
+                builder.withPassword(password.toCharArray());
+            }
+            client = io.lettuce.core.RedisClient.create(builder.build());
+            try (io.lettuce.core.api.StatefulRedisConnection<String, String> conn = client.connect()) {
+                String pong = conn.sync().ping();
+                return "PONG".equalsIgnoreCase(pong) ? null : "Redis PING 响应异常: " + pong;
+            }
+        } catch (Exception e) {
+            log.warn("Redis connection test failed for {}: {}", dataSource.getName(), e.getMessage());
+            return "连接失败: " + e.getMessage();
+        } finally {
+            if (client != null) {
+                try { client.shutdown(); } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    /**
+     * HTTP API 连接测试
+     * @return null 表示成功，非 null 表示错误信息
+     */
+    private String testHttpConnection(DataSource dataSource) {
+        if (dataSource.getHost() == null) {
+            return "缺少 URL 配置";
+        }
+        try {
+            java.net.URL url = new java.net.URL(dataSource.getHost());
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(5000);
+            conn.setRequestMethod("HEAD");
+            int code = conn.getResponseCode();
+            conn.disconnect();
+            if (code >= 500) {
+                return "服务器返回错误状态码: " + code;
+            }
+            return null;
+        } catch (Exception e) {
+            log.warn("HTTP connection test failed for {}: {}", dataSource.getName(), e.getMessage());
+            return "连接失败: " + e.getMessage();
         }
     }
 

@@ -97,6 +97,16 @@
           <span class="nav-icon">🚀</span>
           <span class="nav-text">模型部署</span>
         </div>
+
+        <!-- 数据源管理 -->
+        <div
+          class="nav-item"
+          :class="{ active: $route.path === '/datasources' }"
+          @click="navigate('/datasources')"
+        >
+          <span class="nav-icon">🗄️</span>
+          <span class="nav-text">数据源管理</span>
+        </div>
       </nav>
 
       <div class="sidebar-footer">
@@ -164,7 +174,8 @@ const pageTitle = computed(() => {
     '/features': '特征工程',
     '/samples': '样本工程',
     '/training': '训练管理',
-    '/serving': '模型部署'
+    '/serving': '模型部署',
+    '/datasources': '数据源管理'
   }
   return titles[route.path] || 'MModelX'
 })
