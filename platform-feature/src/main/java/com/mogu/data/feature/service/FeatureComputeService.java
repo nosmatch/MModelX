@@ -7,6 +7,8 @@ import com.mogu.data.common.storage.MinioService;
 import com.mogu.data.common.storage.RedisService;
 import com.mogu.data.common.logger.Logger;
 import com.mogu.data.common.repository.DataSourceRepository;
+import com.mogu.data.common.entity.MaterializationHistory;
+import com.mogu.data.feature.repository.MaterializationHistoryRepository;
 import com.mogu.data.feature.datasource.DataSourceAdapter;
 import com.mogu.data.feature.datasource.DataSourceFactory;
 import com.mogu.data.feature.datasource.DataSourceType;
@@ -16,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -47,6 +50,7 @@ public class FeatureComputeService {
     private final RedisService redisService;
     private final FeatureRegistryService featureRegistryService;
     private final DataSourceRepository dataSourceRepository;
+    private final MaterializationHistoryRepository materializationHistoryRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -161,6 +165,15 @@ public class FeatureComputeService {
     public void materializeFeatures(String featureViewName) {
         log.info("开始物化特征到Redis: {}", featureViewName);
 
+        // 创建物化历史记录（PENDING状态）
+        MaterializationHistory history = MaterializationHistory.builder()
+            .featureViewName(featureViewName)
+            .featureViewId(null) // 暂时不设置
+            .startedAt(LocalDateTime.now())
+            .status(MaterializationHistory.MaterializationStatus.RUNNING)
+            .build();
+        materializationHistoryRepository.save(history);
+
         try {
             // 1. 获取特征视图定义
             FeatureView featureView = getFeatureViewById(featureViewName);
@@ -179,6 +192,7 @@ public class FeatureComputeService {
             String prefix = "feature:" + entity + ":";
 
             int writeCount = 0;
+            long entityCount = 0;
             for (Map<String, Object> featureRecord : features) {
                 Object entityIdObj = featureRecord.get("entity_id");
                 if (entityIdObj == null) {
@@ -186,6 +200,7 @@ public class FeatureComputeService {
                 }
 
                 String entityId = entityIdObj.toString();
+                entityCount++;
 
                 // 写入每个特征字段
                 for (Map.Entry<String, Object> entry : featureRecord.entrySet()) {
@@ -202,12 +217,32 @@ public class FeatureComputeService {
                 }
             }
 
+            // 更新历史记录为成功
+            history.setStatus(MaterializationHistory.MaterializationStatus.SUCCESS);
+            history.setCompletedAt(LocalDateTime.now());
+            history.setEntityCount(entityCount);
+            history.setFeatureCount(writeCount);
+            history.setRedisKeyPrefix(prefix);
+            materializationHistoryRepository.save(history);
+
             log.info("特征物化完成，写入了 {} 个Redis key", writeCount);
 
         } catch (BusinessException e) {
+            // 更新历史记录为失败
+            history.setStatus(MaterializationHistory.MaterializationStatus.FAILED);
+            history.setCompletedAt(LocalDateTime.now());
+            history.setErrorMessage(e.getMessage());
+            materializationHistoryRepository.save(history);
+
             log.error("特征物化失败，特征视图: " + featureViewName);
             throw e;
         } catch (Exception e) {
+            // 更新历史记录为失败
+            history.setStatus(MaterializationHistory.MaterializationStatus.FAILED);
+            history.setCompletedAt(LocalDateTime.now());
+            history.setErrorMessage(e.getMessage());
+            materializationHistoryRepository.save(history);
+
             log.error("特征物化失败，特征视图: " + featureViewName);
             String msg = "特征物化失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误");
             throw new BusinessException("500", msg, e);
@@ -337,25 +372,21 @@ public class FeatureComputeService {
      * @return 特征数据列表
      */
     private List<Map<String, Object>> readFromMinio(String path) {
-        InputStream inputStream = null;
-        try {
-            inputStream = minioService.downloadFile(FEATURES_BUCKET, path);
-            byte[] data = new byte[inputStream.available()];
-            inputStream.read(data);
-
+        try (InputStream inputStream = minioService.downloadFile(FEATURES_BUCKET, path)) {
+            // 使用 ByteArrayOutputStream 可靠地读取全部内容
+            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+            byte[] tmp = new byte[4096];
+            int n;
+            while ((n = inputStream.read(tmp)) != -1) {
+                buffer.write(tmp, 0, n);
+            }
+            byte[] data = buffer.toByteArray();
+            log.debug("Read {} bytes from MinIO path: {}", data.length, path);
             return parseJson(data);
 
         } catch (Exception e) {
             log.error("从MinIO读取失败: " + e.getMessage());
             throw new RuntimeException("从MinIO读取失败", e);
-        } finally {
-            if (inputStream != null) {
-                try {
-                    inputStream.close();
-                } catch (Exception e) {
-                    // ignore
-                }
-            }
         }
     }
 
@@ -601,10 +632,155 @@ public class FeatureComputeService {
     }
 
     /**
+     * 预览特征数据（从MinIO读取前N条记录）
+     *
+     * @param featureViewName 特征视图名称
+     * @param limit 预览条数
+     * @return 特征数据列表
+     */
+    public List<Map<String, Object>> previewFeatures(String featureViewName, int limit) {
+        try {
+            String latestPath = getLatestFeaturePath(featureViewName);
+            log.info("预览特征数据: {}, 路径: {}, 条数: {}", featureViewName, latestPath, limit);
+
+            List<Map<String, Object>> allFeatures = readFromMinio(latestPath);
+
+            if (allFeatures.isEmpty()) {
+                return Collections.emptyList();
+            }
+
+            return allFeatures.stream()
+                .limit(limit)
+                .collect(java.util.stream.Collectors.toList());
+
+        } catch (Exception e) {
+            log.error("预览特征数据失败: " + featureViewName);
+            throw new BusinessException("500", "预览特征数据失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * 从特征视图名称获取实体类型
      */
     private String getEntityFromFeatureView(String featureViewName) {
         FeatureView featureView = getFeatureViewById(featureViewName);
         return featureView.getEntity();
+    }
+
+    /**
+     * 获取Redis状态信息
+     *
+     * @return Redis状态Map
+     */
+    public Map<String, Object> getRedisStatus() {
+        Map<String, Object> status = new HashMap<>();
+        try {
+            // 测试连接：尝试scan一个key
+            Set<String> testKeys = redisService.scan("feature:*", 1);
+            status.put("connected", true);
+
+            // 统计 feature:* 开头的key数量
+            long featureKeyCount = redisService.countKeys("feature:*");
+            status.put("featureKeyCount", featureKeyCount);
+
+            // 统计所有key数量（通过scan feature:*）
+            Set<String> allFeatureKeys = redisService.scan("feature:*");
+            status.put("totalKeys", allFeatureKeys.size());
+
+            // 按实体类型分组统计
+            Map<String, Integer> entityDistribution = new HashMap<>();
+            for (String key : allFeatureKeys) {
+                // key格式: feature:{entity}:{entityId}:{featureName}
+                String[] parts = key.split(":");
+                if (parts.length >= 2) {
+                    String entity = parts[1];
+                    entityDistribution.merge(entity, 1, Integer::sum);
+                }
+            }
+            status.put("entityDistribution", entityDistribution);
+
+            // 计算内存使用（通过key的ttl分布估算）
+            Map<String, Object> memoryInfo = new HashMap<>();
+            memoryInfo.put("estimatedKeys", allFeatureKeys.size());
+            status.put("memoryInfo", memoryInfo);
+
+            // 已物化视图数量
+            status.put("materializedViewCount", getMaterializedViewCount());
+
+        } catch (Exception e) {
+            log.error("获取Redis状态失败: " + e.getMessage());
+            status.put("connected", false);
+            status.put("error", e.getMessage());
+        }
+        return status;
+    }
+
+    /**
+     * 搜索Redis Keys
+     *
+     * @param pattern key匹配模式
+     * @return 匹配的key列表
+     */
+    public List<String> searchRedisKeys(String pattern) {
+        try {
+            Set<String> keys = redisService.scan(pattern);
+            return new ArrayList<>(keys);
+        } catch (Exception e) {
+            log.error("搜索Redis Keys失败: " + e.getMessage());
+            throw new BusinessException("500", "搜索Redis Keys失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 获取Redis Key的值
+     *
+     * @param key Redis key
+     * @return key的值
+     */
+    public Object getRedisKeyValue(String key) {
+        try {
+            return redisService.get(key);
+        } catch (Exception e) {
+            log.error("获取Redis Key值失败: " + e.getMessage());
+            throw new BusinessException("500", "获取Redis Key值失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 获取物化历史记录
+     *
+     * @param featureViewName 特征视图名称（可选，为空则返回所有）
+     * @return 物化历史列表
+     */
+    public List<MaterializationHistory> getMaterializeHistory(String featureViewName) {
+        try {
+            if (featureViewName != null && !featureViewName.isEmpty()) {
+                return materializationHistoryRepository.findByFeatureViewName(featureViewName);
+            } else {
+                return materializationHistoryRepository.findAll();
+            }
+        } catch (Exception e) {
+            log.error("获取物化历史失败: " + e.getMessage());
+            throw new BusinessException("500", "获取物化历史失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 统计已物化的视图数量（有成功物化记录的不同特征视图数）
+     *
+     * @return 已物化视图数量
+     */
+    public long getMaterializedViewCount() {
+        try {
+            List<MaterializationHistory> histories = materializationHistoryRepository.findByStatus(
+                MaterializationHistory.MaterializationStatus.SUCCESS);
+            return histories.stream()
+                .map(MaterializationHistory::getFeatureViewName)
+                .distinct()
+                .count();
+        } catch (Exception e) {
+            log.error("获取已物化视图数量失败: " + e.getMessage());
+            return 0;
+        }
     }
 }

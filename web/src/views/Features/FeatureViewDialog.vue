@@ -73,6 +73,16 @@
             show-word-limit
           />
         </el-form-item>
+
+        <!-- 状态（仅编辑模式） -->
+        <el-form-item v-if="mode === 'edit'" label="状态" prop="status">
+          <el-select v-model="formData.status" placeholder="选择状态" style="width: 100%">
+            <el-option label="草稿" value="DRAFT" />
+            <el-option label="激活" value="ACTIVE" />
+            <el-option label="已弃用" value="DEPRECATED" />
+          </el-select>
+          <div class="form-tip">草稿状态下可进行编辑，激活后可用于特征计算和物化</div>
+        </el-form-item>
       </div>
 
       <!-- 数据源配置部分 -->
@@ -396,6 +406,7 @@ const formData = ref({
   entity: '',
   ttl: DefaultValues.TTL,
   description: '',
+  status: 'DRAFT',
   datasourceId: null,
   sourceConfig: {}
 })
@@ -494,6 +505,7 @@ const initFormData = async () => {
       entity: props.viewData.entity,
       ttl: props.viewData.ttl || DefaultValues.TTL,
       description: props.viewData.description || '',
+      status: props.viewData.status || 'DRAFT',
       datasourceId: props.viewData.datasourceId || null,
       sourceConfig: {}
     }
@@ -527,6 +539,7 @@ const initFormData = async () => {
       entity: '',
       ttl: DefaultValues.TTL,
       description: '',
+      status: 'DRAFT',
       datasourceId: null,
       sourceConfig: {}
     }
@@ -778,6 +791,7 @@ const handleSubmit = async () => {
       entity: formData.value.entity,
       ttl: formData.value.ttl,
       description: formData.value.description,
+      status: formData.value.status,
       datasourceId: formData.value.datasourceId,
       sourceConfig: JSON.stringify(formData.value.sourceConfig)
     }

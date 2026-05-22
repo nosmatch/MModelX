@@ -97,7 +97,7 @@
                   <el-tag size="small">{{ selectedView.entity }}</el-tag>
                 </el-descriptions-item>
                 <el-descriptions-item label="数据源">
-                  <el-tag size="small">{{ DataSourceTypeLabels[selectedView.dataSourceType] }}</el-tag>
+                  <el-tag size="small">{{ DataSourceTypeLabels[selectedView.datasourceType] || selectedView.datasourceType || '未配置' }}</el-tag>
                 </el-descriptions-item>
                 <el-descriptions-item label="TTL">
                   {{ selectedView.ttl }} 天
@@ -364,16 +364,12 @@
           size="small"
         >
           <el-table-column
-            prop="entity_id"
-            label="实体ID"
-            width="120"
-            fixed
-          />
-          <el-table-column
-            v-for="feature in previewData.features"
-            :key="feature.name"
-            :prop="feature.name"
-            :label="feature.name"
+            v-for="key in previewColumns"
+            :key="key"
+            :prop="key"
+            :label="key === 'entity_id' ? '实体ID' : key === 'computed_at' ? '计算时间' : key"
+            :width="key === 'entity_id' ? 120 : key === 'computed_at' ? 160 : undefined"
+            :fixed="key === 'entity_id' ? 'left' : false"
             min-width="120"
           />
         </el-table>
@@ -520,33 +516,30 @@ import {
 } from '@element-plus/icons-vue'
 import { useFeaturesStore } from '@/stores/features'
 import { DataSourceTypeLabels } from '@/constants/features'
+import { previewFeatures, getRedisStatus, searchRedisKeys as apiSearchRedisKeys, getMaterializeHistory } from '@/api/modules/features'
 
 // ==================== Store ====================
 const featuresStore = useFeaturesStore()
 
 // ==================== 响应式数据 ====================
 // 统计数据
-const materializedViewsCount = ref(5)
-const totalRedisKeys = ref(12580)
-const expiringSoonCount = ref(234)
-const memoryUsage = ref('128 MB')
+const materializedViewsCount = ref(0)
+const totalRedisKeys = ref(0)
+const expiringSoonCount = ref(0)
+const memoryUsage = ref('0 MB')
 
 // Redis信息
-const redisConnected = ref(true)
+const redisConnected = ref(false)
 const redisInfo = ref({
-  host: 'localhost',
-  port: 6379,
-  db: 0,
-  keyCount: 12580,
-  memory: '128 MB'
+  host: '-',
+  port: '-',
+  db: '-',
+  keyCount: 0,
+  memory: '-'
 })
 
 // Key分布
-const keyDistribution = ref([
-  { pattern: 'feature:user_id:*', count: 8520, percentage: 68 },
-  { pattern: 'feature:item_id:*', count: 3200, percentage: 25 },
-  { pattern: 'feature:shop_id:*', count: 860, percentage: 7 }
-])
+const keyDistribution = ref([])
 
 // 物化表单
 const materializeForm = ref({
@@ -570,38 +563,7 @@ const progressData = ref({
 
 // 物化历史
 const historyFilter = ref('')
-const materializeHistory = ref([
-  {
-    id: 1,
-    featureViewName: 'user_features',
-    partitionDate: '2026-05-20',
-    entityCount: 1000,
-    featureCount: 15,
-    status: 'success',
-    elapsedTime: 12.5,
-    createdAt: Date.now() - 3600000
-  },
-  {
-    id: 2,
-    featureViewName: 'item_features',
-    partitionDate: '2026-05-20',
-    entityCount: 500,
-    featureCount: 10,
-    status: 'success',
-    elapsedTime: 8.3,
-    createdAt: Date.now() - 7200000
-  },
-  {
-    id: 3,
-    featureViewName: 'shop_features',
-    partitionDate: '2026-05-19',
-    entityCount: 200,
-    featureCount: 8,
-    status: 'failed',
-    elapsedTime: 0,
-    createdAt: Date.now() - 86400000
-  }
-])
+const materializeHistory = ref([])
 
 // 对话框状态
 const showPreviewDialog = ref(false)
@@ -636,10 +598,32 @@ const activeViews = computed(() => {
 })
 
 /**
+ * 预览数据表格列（从数据 keys 动态推导）
+ */
+const previewColumns = computed(() => {
+  if (!previewData.value.data || previewData.value.data.length === 0) {
+    return []
+  }
+  const keys = Object.keys(previewData.value.data[0])
+  // entity_id 放最前面，computed_at 放最后面
+  return keys.sort((a, b) => {
+    if (a === 'entity_id') return -1
+    if (b === 'entity_id') return 1
+    if (a === 'computed_at') return 1
+    if (b === 'computed_at') return -1
+    return a.localeCompare(b)
+  })
+})
+
+/**
  * 选中的视图
  */
 const selectedView = computed(() => {
   if (!materializeForm.value.featureViewName) return null
+  // 优先使用 currentView（包含完整详情如 features、datasourceType）
+  if (featuresStore.currentView && featuresStore.currentView.name === materializeForm.value.featureViewName) {
+    return featuresStore.currentView
+  }
   return activeViews.value.find(v => v.name === materializeForm.value.featureViewName)
 })
 
@@ -653,17 +637,78 @@ const filteredHistory = computed(() => {
 
 // ==================== 方法 ====================
 /**
+ * 加载Redis状态（真实数据）
+ */
+const loadRedisStatus = async () => {
+  try {
+    const response = await getRedisStatus()
+    if (response.code === '200' && response.data) {
+      const data = response.data
+      redisConnected.value = data.connected || false
+      totalRedisKeys.value = data.totalKeys || 0
+      materializedViewsCount.value = data.materializedViewCount || 0
+      memoryUsage.value = (data.memoryInfo?.estimatedKeys || 0) + ' keys'
+
+      // 更新redisInfo
+      redisInfo.value = {
+        host: data.host || '-',
+        port: data.port || '-',
+        db: data.db || '-',
+        keyCount: data.totalKeys || 0,
+        memory: memoryUsage.value
+      }
+
+      // 更新keyDistribution
+      if (data.entityDistribution) {
+        const total = data.totalKeys || 1
+        keyDistribution.value = Object.entries(data.entityDistribution).map(([entity, count]) => ({
+          pattern: `feature:${entity}:*`,
+          count,
+          percentage: Math.round((count / total) * 100)
+        }))
+      } else {
+        keyDistribution.value = []
+      }
+    }
+  } catch (error) {
+    console.error('加载Redis状态失败:', error)
+    redisConnected.value = false
+  }
+}
+
+/**
+ * 加载物化历史（真实数据）
+ */
+const loadMaterializeHistory = async () => {
+  try {
+    const response = await getMaterializeHistory()
+    if (response.code === '200' && response.data) {
+      materializeHistory.value = response.data.map(item => ({
+        id: item.id,
+        featureViewName: item.featureViewName,
+        partitionDate: item.startedAt ? item.startedAt.split('T')[0] : '',
+        entityCount: item.entityCount || 0,
+        featureCount: item.featureCount || 0,
+        status: item.status?.toLowerCase() || 'unknown',
+        elapsedTime: item.completedAt && item.startedAt
+          ? ((new Date(item.completedAt) - new Date(item.startedAt)) / 1000).toFixed(1)
+          : 0,
+        createdAt: item.createdAt ? new Date(item.createdAt).getTime() : Date.now()
+      }))
+    }
+  } catch (error) {
+    console.error('加载物化历史失败:', error)
+    materializeHistory.value = []
+  }
+}
+
+/**
  * 刷新统计信息
  */
 const refreshStats = async () => {
   try {
-    // 这里应该调用API获取最新的统计信息
-    // 暂时模拟数据
-    await new Promise(resolve => setTimeout(resolve, 500))
-
-    totalRedisKeys.value = Math.floor(Math.random() * 20000) + 10000
-    memoryUsage.value = Math.floor(Math.random() * 200 + 100) + ' MB'
-
+    await loadRedisStatus()
+    await loadMaterializeHistory()
     ElMessage.success('统计信息已刷新')
   } catch (error) {
     ElMessage.error('刷新失败: ' + error.message)
@@ -673,10 +718,19 @@ const refreshStats = async () => {
 /**
  * 处理视图变化
  */
-const handleViewChange = () => {
+const handleViewChange = async () => {
   // 重置表单状态
   showProgress.value = false
   materializeProgress.value = 0
+
+  // 加载视图完整详情（包含特征列表和数据源信息）
+  if (materializeForm.value.featureViewName) {
+    try {
+      await featuresStore.fetchView(materializeForm.value.featureViewName)
+    } catch (error) {
+      console.error('加载视图详情失败:', error)
+    }
+  }
 }
 
 /**
@@ -727,17 +781,8 @@ const simulateProgress = () => {
       materializing.value = false
       materializeStatus.value = 'success'
 
-      // 添加到历史记录
-      materializeHistory.value.unshift({
-        id: Date.now(),
-        featureViewName: materializeForm.value.featureViewName,
-        partitionDate: materializeForm.value.partitionDate,
-        entityCount: 1000,
-        featureCount: selectedView.value?.features?.length || 0,
-        status: 'success',
-        elapsedTime: progressData.value.elapsedTime,
-        createdAt: Date.now()
-      })
+      // 物化完成后刷新历史记录（从API获取真实数据）
+      loadMaterializeHistory()
 
       ElMessage.success('物化完成！')
     }
@@ -745,23 +790,30 @@ const simulateProgress = () => {
 }
 
 /**
- * 预览数据
+ * 预览数据（从MinIO读取真实计算结果）
  */
 const handlePreview = async () => {
   try {
-    // 这里应该调用API获取预览数据
-    // 暂时使用模拟数据
-    previewData.value = {
-      featureViewName: materializeForm.value.featureViewName,
-      features: selectedView.value?.features || [],
-      data: [
-        { entity_id: 'user_001', total_orders: 25, avg_order_value: 156.8, last_order_days: 3 },
-        { entity_id: 'user_002', total_orders: 42, avg_order_value: 203.5, last_order_days: 1 },
-        { entity_id: 'user_003', total_orders: 18, avg_order_value: 98.2, last_order_days: 7 }
-      ]
+    const viewName = materializeForm.value.featureViewName
+    if (!viewName) {
+      ElMessage.warning('请先选择特征视图')
+      return
     }
 
-    showPreviewDialog.value = true
+    ElMessage.info('正在加载预览数据...')
+    const response = await previewFeatures(viewName, 10)
+
+    if (response.code === '200') {
+      previewData.value = {
+        featureViewName: viewName,
+        features: selectedView.value?.features || [],
+        data: response.data || []
+      }
+      showPreviewDialog.value = true
+      ElMessage.success(`已加载 ${previewData.value.data.length} 条预览数据`)
+    } else {
+      throw new Error(response.message || '预览失败')
+    }
   } catch (error) {
     ElMessage.error('预览失败: ' + error.message)
   }
@@ -781,22 +833,16 @@ const viewRedisKeys = () => {
  */
 const searchRedisKeys = async () => {
   try {
-    // 这里应该调用API搜索Redis Keys
-    // 暂时使用模拟数据
-    await new Promise(resolve => setTimeout(resolve, 300))
-
-    redisKeys.value = [
-      'feature:user_id:user_001:total_orders',
-      'feature:user_id:user_001:avg_order_value',
-      'feature:user_id:user_002:total_orders',
-      'feature:user_id:user_002:avg_order_value',
-      'feature:item_id:item_001:view_count',
-      'feature:item_id:item_001:click_count'
-    ]
-
-    ElMessage.success(`找到 ${redisKeys.value.length} 个Keys`)
+    const response = await apiSearchRedisKeys(keySearchPattern.value)
+    if (response.code === '200' && response.data) {
+      redisKeys.value = response.data
+      ElMessage.success(`找到 ${redisKeys.value.length} 个Keys`)
+    } else {
+      redisKeys.value = []
+    }
   } catch (error) {
     ElMessage.error('搜索失败: ' + error.message)
+    redisKeys.value = []
   }
 }
 
@@ -942,6 +988,10 @@ const formatDateTime = (timestamp) => {
 onMounted(() => {
   // 加载特征视图列表
   featuresStore.fetchViews()
+  // 加载Redis真实状态
+  loadRedisStatus()
+  // 加载物化历史
+  loadMaterializeHistory()
 })
 </script>
 

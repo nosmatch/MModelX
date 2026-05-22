@@ -144,6 +144,20 @@ export function materializeFeatures(featureViewName) {
 }
 
 /**
+ * 预览特征数据（从MinIO读取）
+ * @param {string} featureViewName - 特征视图名称
+ * @param {number} [limit=10] - 预览条数
+ * @returns {Promise<{code: string, message: string, data: Array}>}
+ */
+export function previewFeatures(featureViewName, limit = 10) {
+  return request({
+    url: `/features/preview/${encodeURIComponent(featureViewName)}`,
+    method: 'get',
+    params: { limit }
+  })
+}
+
+/**
  * 获取在线特征（从Redis实时查询）
  * @param {Object} params - 查询参数
  * @param {string} params.entityType - 实体类型（必填）
@@ -156,6 +170,56 @@ export function getOnlineFeatures(params) {
     url: '/features/online',
     method: 'get',
     params
+  })
+}
+
+/**
+ * 获取Redis状态信息
+ * @returns {Promise<{code: string, message: string, data: {connected: boolean, totalKeys: number, featureKeyCount: number, entityDistribution: Object}}>}
+ */
+export function getRedisStatus() {
+  return request({
+    url: '/features/redis/status',
+    method: 'get'
+  })
+}
+
+/**
+ * 搜索Redis Keys
+ * @param {string} pattern - key匹配模式
+ * @returns {Promise<{code: string, message: string, data: Array<string>}>}
+ */
+export function searchRedisKeys(pattern) {
+  return request({
+    url: '/features/redis/keys',
+    method: 'get',
+    params: { pattern }
+  })
+}
+
+/**
+ * 获取Redis Key的值
+ * @param {string} key - Redis key
+ * @returns {Promise<{code: string, message: string, data: any}>}
+ */
+export function getRedisKeyValue(key) {
+  return request({
+    url: '/features/redis/keys/value',
+    method: 'get',
+    params: { key }
+  })
+}
+
+/**
+ * 获取物化历史记录
+ * @param {string} [featureViewName] - 特征视图名称（可选）
+ * @returns {Promise<{code: string, message: string, data: Array}>}
+ */
+export function getMaterializeHistory(featureViewName) {
+  return request({
+    url: '/features/materialize/history',
+    method: 'get',
+    params: featureViewName ? { featureViewName } : {}
   })
 }
 
@@ -187,6 +251,21 @@ export function getFeatureDefinitions(featureViewName) {
 }
 
 /**
+ * 更新特征定义
+ * @param {string} featureViewName - 特征视图名称
+ * @param {string} featureName - 特征名称
+ * @param {Object} spec - 特征规格
+ * @returns {Promise<{code: string, message: string}>}
+ */
+export function updateFeatureDefinition(featureViewName, featureName, spec) {
+  return request({
+    url: `/features/views/${encodeURIComponent(featureViewName)}/definitions/${encodeURIComponent(featureName)}`,
+    method: 'put',
+    data: spec
+  })
+}
+
+/**
  * 删除特征定义
  * @param {string} featureViewName - 特征视图名称
  * @param {string} featureName - 特征名称
@@ -213,5 +292,11 @@ export default {
   getOnlineFeatures,
   testDataSource,
   getFeatureDefinitions,
-  deleteFeatureDefinition
+  updateFeatureDefinition,
+  deleteFeatureDefinition,
+  getRedisStatus,
+  searchRedisKeys,
+  getRedisKeyValue,
+  getMaterializeHistory,
+  previewFeatures
 }

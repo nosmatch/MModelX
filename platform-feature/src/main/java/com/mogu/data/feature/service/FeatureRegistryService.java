@@ -144,6 +144,13 @@ public class FeatureRegistryService {
         if (apiFeatureView.getDescription() != null) {
             dbFeatureView.setDescription(apiFeatureView.getDescription());
         }
+        if (apiFeatureView.getStatus() != null) {
+            try {
+                dbFeatureView.setStatus(FeatureView.FeatureViewStatus.valueOf(apiFeatureView.getStatus()));
+            } catch (IllegalArgumentException e) {
+                throw new BusinessException("无效的状态值: " + apiFeatureView.getStatus());
+            }
+        }
 
         // 更新数据源关联
         if (apiFeatureView.getDatasourceId() != null) {
@@ -356,6 +363,50 @@ public class FeatureRegistryService {
         return features.stream()
             .map(this::convertToFeatureSpec)
             .collect(java.util.stream.Collectors.toList());
+    }
+
+    /**
+     * 更新特征定义
+     *
+     * @param featureViewName 特征视图名称
+     * @param featureName 特征名称
+     * @param spec 更新后的特征规格
+     */
+    @Transactional
+    public void updateFeatureDefinition(String featureViewName, String featureName,
+                                        com.mogu.data.feature.entity.FeatureDefinition.FeatureSpec spec) {
+        // 获取特征视图
+        FeatureView featureView = featureViewRepository.findActiveByName(featureViewName)
+            .orElseThrow(() -> new BusinessException("特征视图不存在: " + featureViewName));
+
+        // 查找特征
+        List<Feature> features = featureRepository.findActiveFeaturesByViewId(featureView.getId());
+        Feature featureToUpdate = features.stream()
+            .filter(f -> f.getName().equals(featureName))
+            .findFirst()
+            .orElseThrow(() -> new BusinessException("特征不存在: " + featureName));
+
+        // 更新字段
+        if (spec.getDtype() != null) {
+            featureToUpdate.setDtype(spec.getDtype());
+        }
+        if (spec.getDescription() != null) {
+            featureToUpdate.setDescription(spec.getDescription());
+        }
+
+        // 更新配置JSON
+        com.fasterxml.jackson.databind.node.ObjectNode configNode = objectMapper.createObjectNode();
+        if (spec.getTransformExpr() != null) {
+            configNode.put("transformExpr", spec.getTransformExpr());
+        }
+        if (spec.getDefaultValue() != null) {
+            configNode.set("defaultValue", objectMapper.valueToTree(spec.getDefaultValue()));
+        }
+        if (configNode.size() > 0) {
+            featureToUpdate.setConfig(configNode);
+        }
+
+        featureRepository.save(featureToUpdate);
     }
 
     /**
