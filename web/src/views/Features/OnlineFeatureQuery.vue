@@ -55,14 +55,13 @@
 
           <!-- 查询按钮 -->
           <el-col :span="8">
-            <el-form-item label=" ">
+            <el-form-item label-width="0" class="query-btn-item">
               <el-button
                 type="primary"
                 :icon="Search"
                 :loading="querying"
                 :disabled="!canQuery"
                 @click="handleQuery"
-                style="width: 100%"
               >
                 查询特征
               </el-button>
@@ -71,75 +70,101 @@
         </el-row>
 
         <!-- 特征选择 -->
-        <el-form-item label="选择特征">
+        <el-form-item label="选择特征" class="feature-select-item">
           <div class="feature-selector">
-            <div class="selector-left">
-              <el-select
-                v-model="selectedFeatureView"
-                placeholder="选择特征视图（可选）"
-                clearable
-                style="width: 100%; margin-bottom: 12px"
-                @change="handleViewChange"
-              >
-                <el-option
-                  v-for="view in activeViews"
-                  :key="view.name"
-                  :label="view.name"
-                  :value="view.name"
+            <!-- 顶部对齐行 -->
+            <div class="selector-top">
+              <div class="top-left">
+                <el-select
+                  v-model="selectedFeatureView"
+                  placeholder="选择特征视图（可选）"
+                  clearable
+                  style="width: 100%"
+                  @change="handleViewChange"
                 >
-                  <div class="view-option">
-                    <span class="name">{{ view.name }}</span>
-                    <el-tag size="small" type="info">{{ view.entity }}</el-tag>
-                    <span class="count">{{ view.features?.length || 0 }} 特征</span>
-                  </div>
-                </el-option>
-              </el-select>
-
-              <el-transfer
-                v-model="queryForm.featureNames"
-                :data="availableFeatures"
-                :titles="['可选特征', '已选特征']"
-                filterable
-                filter-placeholder="搜索特征"
-                style="width: 100%"
-              >
-                <template #default="{ option }">
-                  <div class="transfer-item">
-                    <span class="feature-name">{{ option.label }}</span>
-                    <el-tag size="small" :type="getDataTypeTagType(option.dtype)">
-                      {{ option.dtype }}
-                    </el-tag>
-                  </div>
-                </template>
-              </el-transfer>
+                  <el-option
+                    v-for="view in activeViews"
+                    :key="view.name"
+                    :label="view.name"
+                    :value="view.name"
+                  >
+                    <div class="view-option">
+                      <span class="name">{{ view.name }}</span>
+                      <el-tag size="small" type="info">{{ view.entity }}</el-tag>
+                      <span class="count">{{ view.features?.length || 0 }} 特征</span>
+                    </div>
+                  </el-option>
+                </el-select>
+              </div>
+              <div class="top-right">
+                <span class="section-title">快捷操作</span>
+              </div>
             </div>
 
-            <div class="selector-right">
-              <div class="quick-select">
-                <div class="section-title">快捷选择</div>
+            <!-- 底部内容行 -->
+            <div class="selector-bottom">
+              <div class="selector-left">
+                <el-transfer
+                  v-model="queryForm.featureNames"
+                  :data="availableFeatures"
+                  :titles="['可选特征', '已选特征']"
+                  filterable
+                  filter-placeholder="搜索特征"
+                  style="width: 100%"
+                  class="feature-transfer"
+                >
+                  <template #default="{ option }">
+                    <div class="transfer-item">
+                      <span class="feature-name">{{ option.label }}</span>
+                      <el-tag size="small" :type="getDataTypeTagType(option.dtype)">
+                        {{ option.dtype }}
+                      </el-tag>
+                    </div>
+                  </template>
+                </el-transfer>
+              </div>
 
-                <!-- 常用特征 -->
-                <div class="feature-group">
-                  <div class="group-title">常用特征</div>
-                  <el-checkbox-group v-model="queryForm.featureNames" class="checkbox-list">
-                    <el-checkbox
-                      v-for="feature in commonFeatures"
-                      :key="feature.name"
-                      :value="feature.name"
-                    >
-                      <span class="checkbox-label">{{ feature.label }}</span>
-                      <el-tag size="small" type="info">{{ feature.dtype }}</el-tag>
-                    </el-checkbox>
-                  </el-checkbox-group>
-                </div>
+              <div class="selector-right">
+                <div class="quick-select">
+                  <!-- 已选特征预览 -->
+                  <div class="feature-group">
+                    <div class="group-title">
+                      已选特征
+                      <el-tag size="small" type="success">{{ queryForm.featureNames.length }}</el-tag>
+                    </div>
+                    <div class="selected-features-list">
+                      <el-tag
+                        v-for="featureName in queryForm.featureNames.slice(0, 15)"
+                        :key="featureName"
+                        size="small"
+                        closable
+                        @close="removeFeature(featureName)"
+                        style="margin: 2px"
+                      >
+                        {{ featureName }}
+                      </el-tag>
+                      <el-tag
+                        v-if="queryForm.featureNames.length > 15"
+                        size="small"
+                        type="info"
+                        style="margin: 2px"
+                      >
+                        +{{ queryForm.featureNames.length - 15 }}
+                      </el-tag>
+                      <div v-if="queryForm.featureNames.length === 0" class="no-selection">
+                        暂无选择
+                      </div>
+                    </div>
+                  </div>
 
-                <!-- 选择操作 -->
-                <div class="select-actions">
-                  <el-button size="small" @click="selectAllFeatures">全选</el-button>
-                  <el-button size="small" @click="clearAllFeatures">清空</el-button>
-                  <el-button size="small" type="primary" @click="saveAsBookmark">
-                    保存为收藏
-                  </el-button>
+                  <!-- 选择操作 -->
+                  <div class="select-actions">
+                    <el-button size="small" @click="selectAllFeatures">全选</el-button>
+                    <el-button size="small" @click="clearAllFeatures">清空</el-button>
+                    <el-button size="small" type="primary" @click="saveAsBookmark">
+                      保存为收藏
+                    </el-button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -168,20 +193,41 @@
       </template>
 
       <!-- 结果统计 -->
-      <div class="result-stats">
-        <div class="stat-item">
-          <span class="label">实体：</span>
-          <span class="value">{{ queryResult.entityType }}:{{ queryResult.entityId }}</span>
-        </div>
-        <div class="stat-item">
-          <span class="label">特征数量：</span>
-          <span class="value highlight">{{ Object.keys(queryResult.features).length }}</span>
-        </div>
-        <div class="stat-item">
-          <span class="label">查询时间：</span>
-          <span class="value">{{ formatDateTime(queryResult.timestamp) }}</span>
-        </div>
-      </div>
+      <el-row :gutter="16" class="result-stats">
+        <el-col :span="8">
+          <div class="stat-card-mini">
+            <div class="stat-icon" style="background: #ecf5ff; color: #409eff;">
+              <el-icon :size="24"><User /></el-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-label">实体</div>
+              <div class="stat-value">{{ queryResult.entityType }}:{{ queryResult.entityId }}</div>
+            </div>
+          </div>
+        </el-col>
+        <el-col :span="8">
+          <div class="stat-card-mini">
+            <div class="stat-icon" style="background: #f0f9ff; color: #67c23a;">
+              <el-icon :size="24"><TrendCharts /></el-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-label">特征数量</div>
+              <div class="stat-value highlight">{{ Object.keys(queryResult.features).length }}</div>
+            </div>
+          </div>
+        </el-col>
+        <el-col :span="8">
+          <div class="stat-card-mini">
+            <div class="stat-icon" style="background: #fdf6ec; color: #e6a23c;">
+              <el-icon :size="24"><Timer /></el-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-label">查询时间</div>
+              <div class="stat-value">{{ formatDateTime(queryResult.timestamp) }}</div>
+            </div>
+          </div>
+        </el-col>
+      </el-row>
 
       <!-- 特征数据表格 -->
       <el-table
@@ -437,7 +483,9 @@ import {
   DocumentCopy,
   Delete,
   TrendCharts,
-  Calendar
+  Calendar,
+  User,
+  Timer
 } from '@element-plus/icons-vue'
 import { useFeaturesStore } from '@/stores/features'
 
@@ -477,31 +525,6 @@ const selectedFeatureView = ref('')
 
 // 可用特征列表
 const availableFeatures = ref([])
-
-// 常用特征（从可用特征动态生成）
-const commonFeatures = computed(() => {
-  if (availableFeatures.value.length === 0) {
-    // 没有选择特征视图时，从所有视图中收集特征
-    const allFeatures = []
-    for (const view of activeViews.value) {
-      if (view.features) {
-        for (const f of view.features) {
-          allFeatures.push({
-            name: f.name,
-            label: f.name,
-            dtype: f.dtype
-          })
-        }
-      }
-    }
-    return allFeatures
-  }
-  return availableFeatures.value.map(f => ({
-    name: f.key,
-    label: f.label,
-    dtype: f.dtype
-  }))
-})
 
 // 常用实体类型
 const commonEntityTypes = ref([
@@ -794,6 +817,16 @@ const clearAllFeatures = () => {
 }
 
 /**
+ * 移除单个已选特征
+ */
+const removeFeature = (featureName) => {
+  const idx = queryForm.value.featureNames.indexOf(featureName)
+  if (idx !== -1) {
+    queryForm.value.featureNames.splice(idx, 1)
+  }
+}
+
+/**
  * 复制特征值
  */
 const copyFeatureValue = (row) => {
@@ -925,16 +958,83 @@ onMounted(async () => {
   align-items: center;
 }
 
+.query-btn-item {
+  display: flex;
+  align-items: flex-end;
+}
+
+.feature-select-item {
+  :deep(.el-form-item__label) {
+    align-self: flex-start;
+    padding-top: 8px;
+  }
+}
+
 .feature-selector {
   display: flex;
-  gap: 20px;
+  flex-direction: column;
+  gap: 12px;
 
-  .selector-left {
-    flex: 1;
+  .selector-top {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+
+    .top-left {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .top-right {
+      width: 280px;
+      flex-shrink: 0;
+    }
+
+    .section-title {
+      font-weight: 600;
+      color: $text-primary;
+      font-size: 14px;
+    }
   }
 
-  .selector-right {
-    width: 280px;
+  .selector-bottom {
+    display: flex;
+    gap: 20px;
+    align-items: stretch;
+    min-height: 380px;
+
+    .selector-left {
+      flex: 1;
+      min-width: 0;
+
+      .feature-transfer {
+        height: 100%;
+
+        :deep(.el-transfer-panel) {
+          width: 42%;
+        }
+
+        :deep(.el-transfer__buttons) {
+          width: 16%;
+          padding: 0 8px;
+        }
+
+        :deep(.el-transfer) {
+          height: 100%;
+
+          .el-transfer-panel {
+            height: 100%;
+          }
+        }
+      }
+    }
+
+    .selector-right {
+      width: 280px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+    }
   }
 }
 
@@ -948,7 +1048,7 @@ onMounted(async () => {
   }
 
   .count {
-    color: #909399;
+    color: $text-muted;
     font-size: 12px;
   }
 }
@@ -966,39 +1066,43 @@ onMounted(async () => {
 
 .quick-select {
   padding: 16px;
-  background: #f5f7fa;
-  border-radius: 4px;
-
-  .section-title {
-    font-weight: 600;
-    color: #303133;
-    margin-bottom: 12px;
-  }
+  background: $bg-gray;
+  border-radius: $radius-sm;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 
   .feature-group {
     margin-bottom: 16px;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 
     .group-title {
       font-size: 13px;
-      color: #606266;
+      color: $text-secondary;
       margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
   }
 
-  .checkbox-list {
+  .selected-features-list {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    max-height: 300px;
+    flex-wrap: wrap;
+    gap: 4px;
     overflow-y: auto;
+    padding: 4px;
+    flex: 1;
+    min-height: 0;
+    align-content: flex-start;
 
-    :deep(.el-checkbox) {
-      margin-right: 0;
-      white-space: nowrap;
-    }
-
-    .checkbox-label {
-      margin-right: 8px;
+    .no-selection {
+      color: $text-muted;
+      font-size: 13px;
+      padding: 8px 0;
     }
   }
 
@@ -1006,7 +1110,9 @@ onMounted(async () => {
     display: flex;
     gap: 8px;
     padding-top: 12px;
-    border-top: 1px solid #dcdfe6;
+    border-top: 1px solid $border-color;
+    margin-top: auto;
+    flex-shrink: 0;
   }
 }
 
@@ -1015,29 +1121,54 @@ onMounted(async () => {
 }
 
 .result-stats {
-  display: flex;
-  gap: 24px;
-  padding: 16px;
-  background: #f5f7fa;
-  border-radius: 4px;
+  margin-bottom: 16px;
 
-  .stat-item {
+  .stat-card-mini {
     display: flex;
     align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: $bg-white;
+    border: 1px solid $border-color;
+    border-radius: $radius-md;
+    transition: all 0.3s;
 
-    .label {
-      color: #606266;
-      font-size: 14px;
+    &:hover {
+      box-shadow: $shadow-hover;
+      transform: translateY(-1px);
     }
 
-    .value {
-      margin-left: 8px;
-      font-weight: 600;
-      color: #303133;
+    .stat-icon {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
 
-      &.highlight {
-        color: #409eff;
-        font-size: 16px;
+    .stat-info {
+      min-width: 0;
+
+      .stat-label {
+        font-size: 12px;
+        color: $text-muted;
+        margin-bottom: 4px;
+      }
+
+      .stat-value {
+        font-size: 14px;
+        font-weight: 600;
+        color: $text-primary;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+
+        &.highlight {
+          color: #409eff;
+          font-size: 18px;
+        }
       }
     }
   }
@@ -1051,7 +1182,7 @@ onMounted(async () => {
 }
 
 .null-value {
-  color: #c0c4cc;
+  color: $text-placeholder;
   font-style: italic;
 }
 
@@ -1068,7 +1199,7 @@ onMounted(async () => {
   gap: 4px;
 
   .more-hint {
-    color: #909399;
+    color: $text-muted;
     font-size: 12px;
   }
 }
@@ -1077,7 +1208,7 @@ onMounted(async () => {
   background: #1e1e1e;
   color: #d4d4d4;
   padding: 16px;
-  border-radius: 4px;
+  border-radius: $radius-sm;
   font-family: 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.6;
@@ -1087,7 +1218,7 @@ onMounted(async () => {
 
 .empty-card {
   margin-top: 20px;
-  min-height: 400px;
+  min-height: 280px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1103,8 +1234,8 @@ onMounted(async () => {
 .bookmark-item {
   padding: 16px;
   margin-bottom: 12px;
-  background: #f5f7fa;
-  border-radius: 4px;
+  background: $bg-gray;
+  border-radius: $radius-sm;
   cursor: pointer;
   transition: all 0.3s;
 
@@ -1133,7 +1264,7 @@ onMounted(async () => {
 
   .entity-id {
     font-weight: 600;
-    color: #303133;
+    color: $text-primary;
   }
 }
 
@@ -1143,7 +1274,7 @@ onMounted(async () => {
   align-items: center;
   gap: 16px;
   font-size: 13px;
-  color: #606266;
+  color: $text-secondary;
 
   .feature-count {
     color: #409eff;
@@ -1156,7 +1287,7 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   font-weight: 600;
-  color: #303133;
+  color: $text-primary;
 }
 
 .bookmark-info {
@@ -1165,7 +1296,7 @@ onMounted(async () => {
   gap: 8px;
 
   .label {
-    color: #606266;
+    color: $text-secondary;
   }
 }
 
@@ -1184,10 +1315,22 @@ onMounted(async () => {
 // 响应式
 @media (max-width: 1200px) {
   .feature-selector {
-    flex-direction: column;
+    .selector-top {
+      flex-direction: column;
+      gap: 12px;
 
-    .selector-right {
-      width: 100%;
+      .top-right {
+        width: 100%;
+      }
+    }
+
+    .selector-bottom {
+      flex-direction: column;
+      min-height: auto;
+
+      .selector-right {
+        width: 100%;
+      }
     }
   }
 }

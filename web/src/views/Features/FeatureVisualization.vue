@@ -184,6 +184,13 @@
           </template>
 
           <div ref="distributionChart" class="chart-container"></div>
+          <div v-if="!featureData.length" class="chart-empty">
+            <el-empty description="暂无数据，请选择特征视图和特征">
+              <template #image>
+                <el-icon :size="48" color="#c0c4cc"><Histogram /></el-icon>
+              </template>
+            </el-empty>
+          </div>
         </el-card>
       </el-col>
 
@@ -195,6 +202,13 @@
           </template>
 
           <div ref="boxplotChart" class="chart-container"></div>
+          <div v-if="!featureData.length" class="chart-empty">
+            <el-empty description="暂无数据，请选择特征视图和特征">
+              <template #image>
+                <el-icon :size="48" color="#c0c4cc"><Histogram /></el-icon>
+              </template>
+            </el-empty>
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -208,6 +222,13 @@
           </template>
 
           <div ref="correlationChart" class="chart-container"></div>
+          <div v-if="!featureData.length" class="chart-empty">
+            <el-empty description="暂无数据，请选择特征视图和特征">
+              <template #image>
+                <el-icon :size="48" color="#c0c4cc"><Grid /></el-icon>
+              </template>
+            </el-empty>
+          </div>
         </el-card>
       </el-col>
 
@@ -219,6 +240,13 @@
           </template>
 
           <div ref="scatterChart" class="chart-container"></div>
+          <div v-if="!featureData.length" class="chart-empty">
+            <el-empty description="暂无数据，请选择特征视图和特征">
+              <template #image>
+                <el-icon :size="48" color="#c0c4cc"><DataAnalysis /></el-icon>
+              </template>
+            </el-empty>
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -244,6 +272,13 @@
       </template>
 
       <div ref="timeSeriesChart" class="chart-container-large"></div>
+      <div v-if="!featureData.length" class="chart-empty">
+        <el-empty description="暂无数据，请选择特征视图和特征">
+          <template #image>
+            <el-icon :size="48" color="#c0c4cc"><TrendCharts /></el-icon>
+          </template>
+        </el-empty>
+      </div>
     </el-card>
 
     <!-- 特征对比 -->
@@ -253,6 +288,13 @@
       </template>
 
       <div ref="comparisonChart" class="chart-container-large"></div>
+      <div v-if="!featureData.length" class="chart-empty">
+        <el-empty description="暂无数据，请选择特征视图和特征">
+          <template #image>
+            <el-icon :size="48" color="#c0c4cc"><DataAnalysis /></el-icon>
+          </template>
+        </el-empty>
+      </div>
     </el-card>
   </div>
 </template>
@@ -273,7 +315,7 @@
  */
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
+import { Refresh, Histogram, Grid, DataAnalysis, TrendCharts } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import { useFeaturesStore } from '@/stores/features'
 
@@ -292,7 +334,7 @@ const timeSeriesFeature = ref('')
 const featureData = ref([])
 const featureStats = ref(null)
 
-// ECharts 实例
+// ECharts DOM 引用
 const distributionChart = ref(null)
 const boxplotChart = ref(null)
 const correlationChart = ref(null)
@@ -300,8 +342,49 @@ const scatterChart = ref(null)
 const timeSeriesChart = ref(null)
 const comparisonChart = ref(null)
 
-let charts = []
+// 图表实例管理：使用 Map 存储，key 为图表名称，value 为 echarts 实例
+const chartInstances = new Map()
 let refreshTimer = null
+
+/**
+ * 获取或初始化图表实例
+ * @param {string} name - 图表名称（作为 Map key）
+ * @param {HTMLElement} dom - DOM 元素
+ * @returns {Object} echarts 实例
+ */
+const getOrCreateChart = (name, dom) => {
+  if (!dom) return null
+  // 如果已有实例，先 dispose
+  const existing = chartInstances.get(name)
+  if (existing) {
+    existing.dispose()
+  }
+  const instance = echarts.init(dom)
+  chartInstances.set(name, instance)
+  return instance
+}
+
+/**
+ * 销毁单个图表实例
+ * @param {string} name - 图表名称
+ */
+const disposeChart = (name) => {
+  const instance = chartInstances.get(name)
+  if (instance) {
+    instance.dispose()
+    chartInstances.delete(name)
+  }
+}
+
+/**
+ * 销毁所有图表实例
+ */
+const disposeAllCharts = () => {
+  chartInstances.forEach((instance) => {
+    instance.dispose()
+  })
+  chartInstances.clear()
+}
 
 // ==================== 计算属性 ====================
 /**
@@ -479,22 +562,24 @@ const calculateStats = () => {
  * 渲染所有图表
  */
 const renderAllCharts = () => {
-  renderDistributionChart()
-  renderBoxplotChart()
-  renderCorrelationChart()
-  renderScatterChart()
-  renderTimeSeriesChart()
-  renderComparisonChart()
+  // 先清理所有旧实例，再重新渲染
+  disposeAllCharts()
+  nextTick(() => {
+    renderDistributionChart()
+    renderBoxplotChart()
+    renderCorrelationChart()
+    renderScatterChart()
+    renderTimeSeriesChart()
+    renderComparisonChart()
+  })
 }
 
 /**
  * 渲染分布图
  */
 const renderDistributionChart = () => {
-  if (!distributionChart.value) return
-
-  const chart = echarts.init(distributionChart.value)
-  charts.push(chart)
+  const chart = getOrCreateChart('distribution', distributionChart.value)
+  if (!chart) return
 
   const featureName = distributionFeature.value
   const values = featureData.value.map(row => row[featureName])
@@ -552,10 +637,8 @@ const renderDistributionChart = () => {
  * 渲染箱线图
  */
 const renderBoxplotChart = () => {
-  if (!boxplotChart.value) return
-
-  const chart = echarts.init(boxplotChart.value)
-  charts.push(chart)
+  const chart = getOrCreateChart('boxplot', boxplotChart.value)
+  if (!chart) return
 
   const numeric = selectedFeatures.value.filter(fname => {
     const feature = availableFeatures.value.find(f => f.name === fname)
@@ -606,10 +689,8 @@ const renderBoxplotChart = () => {
  * 渲染相关性热力图
  */
 const renderCorrelationChart = () => {
-  if (!correlationChart.value) return
-
-  const chart = echarts.init(correlationChart.value)
-  charts.push(chart)
+  const chart = getOrCreateChart('correlation', correlationChart.value)
+  if (!chart) return
 
   const numeric = selectedFeatures.value.filter(fname => {
     const feature = availableFeatures.value.find(f => f.name === fname)
@@ -705,10 +786,8 @@ const calculateCorrelation = (x, y) => {
  * 渲染散点图
  */
 const renderScatterChart = () => {
-  if (!scatterChart.value) return
-
-  const chart = echarts.init(scatterChart.value)
-  charts.push(chart)
+  const chart = getOrCreateChart('scatter', scatterChart.value)
+  if (!chart) return
 
   const numeric = selectedFeatures.value.filter(fname => {
     const feature = availableFeatures.value.find(f => f.name === fname)
@@ -754,10 +833,8 @@ const renderScatterChart = () => {
  * 渲染时间序列图
  */
 const renderTimeSeriesChart = () => {
-  if (!timeSeriesChart.value) return
-
-  const chart = echarts.init(timeSeriesChart.value)
-  charts.push(chart)
+  const chart = getOrCreateChart('timeSeries', timeSeriesChart.value)
+  if (!chart) return
 
   const featureName = timeSeriesFeature.value
   const data = featureData.value.map(row => [row._timestamp, row[featureName]])
@@ -802,10 +879,8 @@ const renderTimeSeriesChart = () => {
  * 渲染对比图
  */
 const renderComparisonChart = () => {
-  if (!comparisonChart.value) return
-
-  const chart = echarts.init(comparisonChart.value)
-  charts.push(chart)
+  const chart = getOrCreateChart('comparison', comparisonChart.value)
+  if (!chart) return
 
   const numeric = selectedFeatures.value.filter(fname => {
     const feature = availableFeatures.value.find(f => f.name === fname)
@@ -914,8 +989,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   // 销毁所有图表实例
-  charts.forEach(chart => chart.dispose())
-  charts = []
+  disposeAllCharts()
 
   // 清除定时器
   if (refreshTimer) {
@@ -929,7 +1003,9 @@ onUnmounted(() => {
  * 处理窗口大小变化
  */
 const handleResize = () => {
-  charts.forEach(chart => chart.resize())
+  chartInstances.forEach((chart) => {
+    chart.resize()
+  })
 }
 
 // 监听特征分布选择变化
@@ -960,7 +1036,7 @@ watch(timeSeriesFeature, () => {
 }
 
 .view-meta {
-  color: #909399;
+  color: $text-muted;
   font-size: 12px;
   margin-left: 8px;
 }
@@ -992,8 +1068,8 @@ watch(timeSeriesFeature, () => {
 
 .stat-box {
   padding: 16px;
-  background: #f5f7fa;
-  border-radius: 4px;
+  background: $bg-gray;
+  border-radius: $radius-sm;
 
   .stat-header {
     display: flex;
@@ -1004,7 +1080,7 @@ watch(timeSeriesFeature, () => {
     .stat-name {
       font-weight: 600;
       font-size: 14px;
-      color: #303133;
+      color: $text-primary;
     }
   }
 
@@ -1020,12 +1096,12 @@ watch(timeSeriesFeature, () => {
       }
 
       .label {
-        color: #606266;
+        color: $text-secondary;
       }
 
       .value {
         font-weight: 500;
-        color: #303133;
+        color: $text-primary;
 
         &.warning {
           color: #e6a23c;
@@ -1041,13 +1117,33 @@ watch(timeSeriesFeature, () => {
 
 .chart-card {
   height: 450px;
+  position: relative;
 
   .chart-container {
     height: 350px;
   }
 
+  .chart-container:has(+ .chart-empty) {
+    display: none;
+  }
+
   .chart-container-large {
     height: 400px;
+  }
+
+  .chart-container-large:has(+ .chart-empty) {
+    display: none;
+  }
+
+  .chart-empty {
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 

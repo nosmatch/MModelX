@@ -187,41 +187,44 @@
       <!-- 操作列 -->
       <el-table-column
         label="操作"
-        width="280"
+        width="140"
         fixed="right"
         align="center"
       >
         <template #default="{ row }">
-          <el-button-group>
-            <!-- 查看详情 -->
-            <el-button
-              size="small"
-              :icon="View"
-              @click.stop="handleView(row)"
+          <div class="action-buttons">
+            <el-tooltip content="查看详情" placement="top"
             >
-              详情
-            </el-button>
+              <el-button
+                size="small"
+                :icon="View"
+                circle
+                @click.stop="handleView(row)"
+              />
+            </el-tooltip>
 
-            <!-- 编辑 -->
-            <el-button
-              size="small"
-              type="primary"
-              :icon="Edit"
-              @click.stop="handleEdit(row)"
+            <el-tooltip content="编辑" placement="top"
             >
-              编辑
-            </el-button>
+              <el-button
+                size="small"
+                type="primary"
+                :icon="Edit"
+                circle
+                @click.stop="handleEdit(row)"
+              />
+            </el-tooltip>
 
-            <!-- 删除 -->
-            <el-button
-              size="small"
-              type="danger"
-              :icon="Delete"
-              @click.stop="handleDelete(row)"
+            <el-tooltip content="删除" placement="top"
             >
-              删除
-            </el-button>
-          </el-button-group>
+              <el-button
+                size="small"
+                type="danger"
+                :icon="Delete"
+                circle
+                @click.stop="handleDelete(row)"
+              />
+            </el-tooltip>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -541,8 +544,8 @@ watch([filterStatus, filterEntity], () => {
 <style scoped lang="scss">
 .feature-view-list {
   padding: 24px;
-  background: #fff;
-  border-radius: 8px;
+  background: $bg-white;
+  border-radius: $radius-md;
 }
 
 .toolbar {
@@ -551,8 +554,8 @@ watch([filterStatus, filterEntity], () => {
   align-items: center;
   margin-bottom: 20px;
   padding: 16px;
-  background: #f5f7fa;
-  border-radius: 4px;
+  background: $bg-gray;
+  border-radius: $radius-sm;
 
   .left-actions,
   .right-actions {
@@ -572,7 +575,7 @@ watch([filterStatus, filterEntity], () => {
 
   .name {
     font-weight: 500;
-    color: #303133;
+    color: $text-primary;
   }
 }
 
@@ -580,6 +583,12 @@ watch([filterStatus, filterEntity], () => {
   display: flex;
   justify-content: center;
   margin-top: 24px;
+}
+
+.action-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
 }
 
 /* 表格行悬停效果 */

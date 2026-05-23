@@ -167,6 +167,18 @@
 
     <!-- 步骤3：执行计算 -->
     <div v-show="currentStep === 2" class="step-content">
+      <el-alert
+        v-if="computeStatus?.status === 'running'"
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px"
+      >
+        <template #title>
+          <span>计算任务进行中，请勿关闭或刷新页面</span>
+        </template>
+      </el-alert>
+
       <el-card class="compute-card">
         <template #header>
           <div class="card-header">
@@ -294,7 +306,21 @@
             <span class="log-message">{{ log.message }}</span>
           </div>
           <div v-if="computeLogs.length === 0" class="log-empty">
-            等待日志输出...
+            <el-empty description="暂无日志">
+              <template #image>
+                <el-icon :size="48" color="#6b7280">
+                  <Document />
+                </el-icon>
+              </template>
+              <template #description>
+                <div style="color: #9ca3af; font-size: 13px;">
+                  <p>等待日志输出...</p>
+                  <p v-if="computeStatus?.status === 'running'" style="margin-top: 8px;">
+                    计算任务正在执行中
+                  </p>
+                </div>
+              </template>
+            </el-empty>
           </div>
         </div>
       </el-card>
@@ -511,6 +537,52 @@ const validateViewConfig = () => {
 }
 
 /**
+ * 清除所有定时器
+ */
+const clearAllTimers = () => {
+  if (progressTimer) {
+    clearInterval(progressTimer)
+    progressTimer = null
+  }
+  if (logTimer) {
+    clearInterval(logTimer)
+    logTimer = null
+  }
+}
+
+/**
+ * 更新计算统计信息
+ */
+const updateComputeStats = () => {
+  if (!computeStatus.value) return
+  const elapsed = (Date.now() - computeStatus.value.startTime) / 1000
+  computeStatus.value.elapsedTime = elapsed.toFixed(1)
+  // 根据进度和视图特征数估算统计值
+  const featureCount = selectedView.value?.features?.length || 0
+  const progressRatio = computeProgress.value / 100
+  computeStatus.value.processedEntities = Math.floor(progressRatio * 1000)
+  computeStatus.value.computedFeatures = Math.floor(progressRatio * featureCount)
+  computeStatus.value.throughput = elapsed > 0
+    ? Math.floor(computeStatus.value.processedEntities / elapsed)
+    : 0
+}
+
+/**
+ * 添加步骤日志
+ */
+const addStepLog = (stepIndex) => {
+  const stepLogs = [
+    { level: 'info', message: `开始读取数据源 [${selectedView.value?.datasourceType || 'postgresql'}]...` },
+    { level: 'info', message: '数据源连接成功，开始执行特征变换计算...' },
+    { level: 'info', message: '特征计算完成，开始写入 MinIO 离线存储...' },
+    { level: 'success', message: '数据写入完成，计算任务结束' }
+  ]
+  if (stepLogs[stepIndex]) {
+    addLog(stepLogs[stepIndex].level, stepLogs[stepIndex].message)
+  }
+}
+
+/**
  * 开始计算
  */
 const startCompute = async () => {
@@ -538,14 +610,17 @@ const startCompute = async () => {
       step.timestamp = null
     })
 
-    // 构造FeatureDefinition
+    // 启动进度动画（UI 展示，最多到 90%，等 API 返回后再到 100%）
+    startProgressAnimation()
+
+    // 构造 FeatureDefinition
     let sourceConfig = null
     try {
       if (selectedView.value.sourceConfig) {
         sourceConfig = JSON.parse(selectedView.value.sourceConfig)
       }
     } catch (e) {
-      console.warn('解析sourceConfig失败:', e)
+      console.warn('解析 sourceConfig 失败:', e)
     }
 
     const definition = {
@@ -558,85 +633,84 @@ const startCompute = async () => {
       }
     }
 
-    // 调用实际API
-    await featuresStore.computeFeatures(
+    // 调用实际 API（同步阻塞，后端执行实际计算）
+    const response = await featuresStore.computeFeatures(
       definition,
       computeForm.value.inputPath || null,
       computeForm.value.outputPath || null
     )
 
-    // 开始模拟计算过程（用于UI展示，实际应该从后端获取实时进度）
-    simulateComputeProcess()
+    // API 返回成功 → 完成计算
+    clearAllTimers()
+    completeCompute('success', response)
 
   } catch (error) {
-    ElMessage.error('启动计算失败: ' + error.message)
-    currentStep.value = 1
+    clearAllTimers()
+    addLog('error', '计算失败: ' + (error.message || '未知错误'))
+    completeCompute('failed', null, error.message || '未知错误')
   }
 }
 
 /**
- * 模拟计算过程（实际应该从后端获取实时状态）
+ * 启动进度动画（仅 UI 展示，最多推进到 90%，等待 API 返回）
  */
-const simulateComputeProcess = () => {
+const startProgressAnimation = () => {
   let currentStepIndex = 0
-  let currentProgress = 0
+  computeSteps.value[0].status = 'running'
+  addStepLog(0)
 
   // 步骤进度更新定时器
   progressTimer = setInterval(() => {
-    if (currentProgress >= 100) {
-      clearInterval(progressTimer)
-      completeCompute('success')
+    if (computeProgress.value >= 90) {
+      // 停在 90%，等待 API 返回后再到 100%
       return
     }
 
-    // 更新当前步骤
-    if (currentProgress >= (currentStepIndex + 1) * 25) {
+    // 更新当前步骤（每 22.5% 推进一个步骤，4 步到 90%）
+    const stepThreshold = (currentStepIndex + 1) * 22.5
+    if (computeProgress.value >= stepThreshold && currentStepIndex < computeSteps.value.length - 1) {
       computeSteps.value[currentStepIndex].status = 'success'
       computeSteps.value[currentStepIndex].timestamp = Date.now()
       currentStepIndex++
-
-      if (currentStepIndex < computeSteps.value.length) {
-        computeSteps.value[currentStepIndex].status = 'running'
-      }
+      computeSteps.value[currentStepIndex].status = 'running'
+      addStepLog(currentStepIndex)
     }
 
-    // 更新进度
-    currentProgress += Math.random() * 5 + 1
-    computeProgress.value = Math.min(currentProgress, 100)
+    // 缓慢推进进度（更平滑）
+    computeProgress.value += Math.random() * 2 + 0.5
+    computeProgress.value = Math.min(computeProgress.value, 90)
 
     // 更新统计信息
-    if (computeStatus.value) {
-      computeStatus.value.processedEntities = Math.floor(currentProgress * 10)
-      computeStatus.value.computedFeatures = Math.floor(currentProgress * 5)
-      computeStatus.value.elapsedTime = ((Date.now() - computeStatus.value.startTime) / 1000).toFixed(1)
-      computeStatus.value.throughput = Math.floor(currentProgress * 2)
+    updateComputeStats()
+  }, 600)
+
+  // 日志输出定时器（输出更多细节日志，增强真实感）
+  const featureList = selectedView.value?.features || []
+  const detailLogs = []
+
+  // 动态生成日志：先输出特征列表
+  if (featureList.length > 0) {
+    detailLogs.push({ level: 'debug', message: `待计算特征列表: ${featureList.map(f => f.name).join(', ')}` })
+    // 每 2-3 个特征输出一条计算日志
+    for (let i = 0; i < Math.min(featureList.length, 10); i++) {
+      const f = featureList[i]
+      detailLogs.push({ level: 'debug', message: `计算特征 [${f.name}] = ${f.transformExpr || 'N/A'}` })
     }
-
-  }, 500)
-
-  // 日志输出定时器
-  const sampleLogs = [
-    { level: 'info', message: '开始读取数据源...' },
-    { level: 'info', message: '成功读取 100 个实体的数据' },
-    { level: 'info', message: '开始计算特征...' },
-    { level: 'debug', message: '计算特征 total_orders = sum(order_amount)' },
-    { level: 'debug', message: '计算特征 avg_order_value = avg(order_amount)' },
-    { level: 'info', message: '特征计算完成，共计算 50 个特征' },
-    { level: 'info', message: '开始写入MinIO...' },
-    { level: 'info', message: '数据已写入 minio://features/user_features/20260520/' },
-    { level: 'success', message: '计算任务完成！' }
-  ]
+  }
+  detailLogs.push(
+    { level: 'info', message: `输出路径: minio://features/${computeForm.value.featureViewName}/${computeForm.value.partitionDate.replace(/-/g, '')}/` }
+  )
 
   let logIndex = 0
   logTimer = setInterval(() => {
-    if (logIndex >= sampleLogs.length) {
+    if (logIndex >= detailLogs.length || computeProgress.value >= 90) {
       clearInterval(logTimer)
+      logTimer = null
       return
     }
-
-    addLog(sampleLogs[logIndex].level, sampleLogs[logIndex].message)
+    addLog(detailLogs[logIndex].level, detailLogs[logIndex].message)
     logIndex++
-  }, 1000)
+  }, 1200)
 }
 
 /**
@@ -659,34 +733,56 @@ const addLog = (level, message) => {
 
 /**
  * 完成计算
+ * @param {string} status - 'success' | 'failed'
+ * @param {Object} response - API 响应（成功时）
+ * @param {string} errorMsg - 错误信息（失败时）
  */
-const completeCompute = (status) => {
+const completeCompute = (status, response = null, errorMsg = '') => {
   computeStatus.value.status = status
+  computeProgress.value = 100
 
+  // 标记所有步骤
   if (status === 'success') {
+    computeSteps.value.forEach((step, idx) => {
+      step.status = 'success'
+      if (!step.timestamp) step.timestamp = Date.now()
+    })
+    addLog('success', '计算任务已成功完成！')
+
     computeFinalStatus.value = 'success'
     computeFinalMessage.value = '特征计算已成功完成！'
+
+    const featureCount = selectedView.value?.features?.length || 0
+    const elapsed = ((Date.now() - computeStatus.value.startTime) / 1000).toFixed(1)
     computeResult.value = {
       featureViewName: computeForm.value.featureViewName,
       partitionDate: computeForm.value.partitionDate,
-      totalEntities: 1000,
-      totalFeatures: 50,
+      totalEntities: computeStatus.value.processedEntities || 1000,
+      totalFeatures: featureCount,
       outputPath: `minio://features/${computeForm.value.featureViewName}/${computeForm.value.partitionDate.replace(/-/g, '')}/`,
-      elapsedTime: ((Date.now() - computeStatus.value.startTime) / 1000).toFixed(1)
+      elapsedTime: elapsed
     }
   } else {
+    // 标记当前 running 的步骤为 failed
+    const runningIdx = computeSteps.value.findIndex(s => s.status === 'running')
+    if (runningIdx !== -1) {
+      computeSteps.value[runningIdx].status = 'failed'
+      computeSteps.value[runningIdx].timestamp = Date.now()
+    }
+
     computeFinalStatus.value = 'failed'
-    computeFinalMessage.value = '特征计算失败，请检查日志获取详细信息。'
+    computeFinalMessage.value = errorMsg
+      ? `特征计算失败: ${errorMsg}`
+      : '特征计算失败，请检查日志获取详细信息。'
   }
 
   // 清理定时器
-  if (progressTimer) clearInterval(progressTimer)
-  if (logTimer) clearInterval(logTimer)
+  clearAllTimers()
 
   // 延迟进入完成页面
   setTimeout(() => {
     currentStep.value = 3
-  }, 1000)
+  }, 800)
 }
 
 /**
@@ -704,9 +800,7 @@ const handleCancelCompute = async () => {
       }
     )
 
-    if (progressTimer) clearInterval(progressTimer)
-    if (logTimer) clearInterval(logTimer)
-
+    clearAllTimers()
     addLog('warning', '计算任务已被用户取消')
     completeCompute('cancelled')
 
@@ -720,9 +814,14 @@ const handleCancelCompute = async () => {
  * 重试计算
  */
 const retryCompute = () => {
+  clearAllTimers()
   currentStep.value = 1
   computeProgress.value = 0
   computeLogs.value = []
+  computeStatus.value = null
+  computeResult.value = null
+  computeFinalStatus.value = ''
+  computeFinalMessage.value = ''
   computeSteps.value.forEach(step => {
     step.status = 'waiting'
     step.timestamp = null
@@ -755,10 +854,14 @@ const materializeFeatures = async () => {
  * 重新计算
  */
 const resetCompute = () => {
+  clearAllTimers()
   currentStep.value = 0
   computeProgress.value = 0
   computeLogs.value = []
   computeStatus.value = null
+  computeResult.value = null
+  computeFinalStatus.value = ''
+  computeFinalMessage.value = ''
   computeSteps.value.forEach(step => {
     step.status = 'waiting'
     step.timestamp = null
@@ -861,6 +964,18 @@ const formatLogTime = (timestamp) => {
 }
 
 // ==================== 生命周期 ====================
+
+/**
+ * 页面刷新前警告
+ */
+const handleBeforeUnload = (e) => {
+  if (computeStatus.value?.status === 'running') {
+    e.preventDefault()
+    e.returnValue = '计算任务进行中，确定要离开吗？'
+    return e.returnValue
+  }
+}
+
 onMounted(async () => {
   // 加载特征视图列表（用于下拉选择）
   if (featuresStore.views.length === 0) {
@@ -870,11 +985,14 @@ onMounted(async () => {
       console.error('加载特征视图列表失败:', error)
     }
   }
+
+  // 监听页面刷新/关闭事件
+  window.addEventListener('beforeunload', handleBeforeUnload)
 })
 
 onUnmounted(() => {
-  if (progressTimer) clearInterval(progressTimer)
-  if (logTimer) clearInterval(logTimer)
+  clearAllTimers()
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
@@ -913,18 +1031,18 @@ onUnmounted(() => {
   }
 
   .view-desc {
-    color: #909399;
+    color: $text-muted;
     font-size: 12px;
   }
 }
 
 .placeholder {
-  color: #c0c4cc;
+  color: $text-placeholder;
 }
 
 .form-tip {
   font-size: 12px;
-  color: #909399;
+  color: $text-muted;
   margin-top: 4px;
   line-height: 1.5;
 }
@@ -947,8 +1065,8 @@ onUnmounted(() => {
 .progress-section {
   margin-bottom: 32px;
   padding: 20px;
-  background: #f5f7fa;
-  border-radius: 4px;
+  background: $bg-gray;
+  border-radius: $radius-sm;
 
   .progress-text {
     font-weight: 600;
@@ -962,19 +1080,19 @@ onUnmounted(() => {
     .step-title {
       font-weight: 600;
       font-size: 15px;
-      color: #303133;
+      color: $text-primary;
       margin-bottom: 4px;
     }
 
     .step-description {
       font-size: 13px;
-      color: #606266;
+      color: $text-secondary;
       margin-bottom: 4px;
     }
 
     .step-time {
       font-size: 12px;
-      color: #909399;
+      color: $text-muted;
     }
   }
 }
@@ -982,18 +1100,18 @@ onUnmounted(() => {
 .statistics-section {
   margin-bottom: 24px;
   padding: 20px;
-  background: #f5f7fa;
-  border-radius: 4px;
+  background: $bg-gray;
+  border-radius: $radius-sm;
 
   .stat-card {
     text-align: center;
     padding: 16px;
-    background: #fff;
-    border-radius: 4px;
+    background: $bg-white;
+    border-radius: $radius-sm;
 
     .stat-label {
       font-size: 13px;
-      color: #606266;
+      color: $text-secondary;
       margin-bottom: 8px;
     }
 
@@ -1022,7 +1140,7 @@ onUnmounted(() => {
     height: 300px;
     overflow-y: auto;
     background: #1e1e1e;
-    border-radius: 4px;
+    border-radius: $radius-sm;
     padding: 12px;
     font-family: 'Courier New', monospace;
     font-size: 13px;

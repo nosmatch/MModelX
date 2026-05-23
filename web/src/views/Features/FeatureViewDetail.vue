@@ -434,13 +434,13 @@ onMounted(() => {
     .view-name {
       font-size: 28px;
       font-weight: 600;
-      color: #303133;
+      color: $text-primary;
       margin: 0 0 8px 0;
     }
 
     .view-description {
       font-size: 14px;
-      color: #606266;
+      color: $text-secondary;
       margin: 0;
     }
   }
@@ -470,9 +470,9 @@ onMounted(() => {
 }
 
 .config-json {
-  background: #f5f7fa;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
+  background: $bg-gray;
+  border: 1px solid $border-color;
+  border-radius: $radius-sm;
   padding: 16px;
   margin: 0;
   font-family: 'Courier New', monospace;

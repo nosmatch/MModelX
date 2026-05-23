@@ -160,6 +160,19 @@
             </el-form-item>
           </el-form>
 
+          <!-- 物化进行中警告 -->
+          <el-alert
+            v-if="materializing"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 16px"
+          >
+            <template #title>
+              <span>物化任务进行中，请勿关闭或刷新页面</span>
+            </template>
+          </el-alert>
+
           <!-- 物化进度 -->
           <div v-if="showProgress" class="progress-section">
             <el-divider content-position="left">
@@ -497,7 +510,7 @@
  * @author MModelX Team
  * @since 2026-05-20
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   FolderOpened,
@@ -588,6 +601,9 @@ const cleanupForm = ref({
 // Redis Keys查看
 const keySearchPattern = ref('feature:*')
 const redisKeys = ref([])
+
+// 进度定时器
+let progressTimer = null
 
 // ==================== 计算属性 ====================
 /**
@@ -741,52 +757,107 @@ const disabledDate = (time) => {
 }
 
 /**
- * 执行物化
+ * 清除进度定时器
  */
-const handleMaterialize = async () => {
-  try {
-    materializing.value = true
-    showProgress.value = true
-    materializeProgress.value = 0
-    materializeStatus.value = ''
-
-    // 调用物化API
-    await featuresStore.materializeFeatures(materializeForm.value.featureViewName)
-
-    // 模拟物化进度
-    simulateProgress()
-
-    ElMessage.success('物化任务已启动')
-  } catch (error) {
-    ElMessage.error('物化失败: ' + error.message)
-    materializing.value = false
+const clearProgressTimer = () => {
+  if (progressTimer) {
+    clearInterval(progressTimer)
+    progressTimer = null
   }
 }
 
 /**
- * 模拟物化进度
+ * 重置物化状态
  */
-const simulateProgress = () => {
-  let progress = 0
-  const timer = setInterval(() => {
-    progress += Math.random() * 10 + 5
-    materializeProgress.value = Math.min(progress, 100)
+const resetMaterializeState = () => {
+  clearProgressTimer()
+  materializing.value = false
+  materializeProgress.value = 0
+  materializeStatus.value = ''
+  progressData.value = {
+    processedEntities: 0,
+    writtenKeys: 0,
+    elapsedTime: 0
+  }
+}
 
-    progressData.value.processedEntities = Math.floor(progress * 10)
-    progressData.value.writtenKeys = Math.floor(progress * 15)
-    progressData.value.elapsedTime = (progress / 10).toFixed(1)
+/**
+ * 执行物化
+ */
+const handleMaterialize = async () => {
+  materializing.value = true
+  showProgress.value = true
+  materializeProgress.value = 0
+  materializeStatus.value = ''
+  progressData.value = {
+    processedEntities: 0,
+    writtenKeys: 0,
+    elapsedTime: 0
+  }
 
-    if (progress >= 100) {
-      clearInterval(timer)
-      materializing.value = false
-      materializeStatus.value = 'success'
+  // 启动进度动画（最多到 90%，等 API 返回后再到 100%）
+  startProgressAnimation()
 
-      // 物化完成后刷新历史记录（从API获取真实数据）
-      loadMaterializeHistory()
+  try {
+    // 调用物化 API
+    await featuresStore.materializeFeatures(materializeForm.value.featureViewName)
 
-      ElMessage.success('物化完成！')
+    // API 返回成功 → 完成物化
+    clearProgressTimer()
+    completeMaterialize('success')
+  } catch (error) {
+    clearProgressTimer()
+    completeMaterialize('failed', error.message)
+  }
+}
+
+/**
+ * 启动进度动画（仅 UI 展示，最多到 90%，等待 API 返回）
+ */
+const startProgressAnimation = () => {
+  const startTime = Date.now()
+  const viewName = materializeForm.value.featureViewName
+  const featureCount = selectedView.value?.features?.length || 0
+
+  progressTimer = setInterval(() => {
+    if (materializeProgress.value >= 90) {
+      return
     }
-  }, 500)
+
+    materializeProgress.value += Math.random() * 2 + 0.5
+    materializeProgress.value = Math.min(materializeProgress.value, 90)
+
+    // 根据进度估算统计数据
+    const progressRatio = materializeProgress.value / 100
+    progressData.value.processedEntities = Math.floor(progressRatio * 1000)
+    progressData.value.writtenKeys = Math.floor(progressRatio * progressData.value.processedEntities * (featureCount || 1))
+    progressData.value.elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1)
+  }, 600)
+}
+
+/**
+ * 完成物化
+ * @param {string} status - 'success' | 'failed'
+ * @param {string} errorMsg - 错误信息
+ */
+const completeMaterialize = (status, errorMsg = '') => {
+  materializeProgress.value = 100
+  materializing.value = false
+
+  if (status === 'success') {
+    materializeStatus.value = 'success'
+    ElMessage.success('物化完成！')
+
+    // 刷新历史记录（从 API 获取真实数据）
+    loadMaterializeHistory()
+  } else {
+    materializeStatus.value = 'exception'
+    ElMessage.error('物化失败: ' + (errorMsg || '未知错误'))
+  }
+
+  // 最终统计数据
+  progressData.value.processedEntities = status === 'success' ? 1000 : progressData.value.processedEntities
+  progressData.value.writtenKeys = status === 'success' ? 1000 * (selectedView.value?.features?.length || 1) : progressData.value.writtenKeys
 }
 
 /**
@@ -909,6 +980,8 @@ const viewMaterializeDetail = (row) => {
  * 重试物化
  */
 const retryMaterialize = async (row) => {
+  resetMaterializeState()
+  showProgress.value = false
   materializeForm.value.featureViewName = row.featureViewName
   materializeForm.value.partitionDate = row.partitionDate
   await handleMaterialize()
@@ -985,6 +1058,18 @@ const formatDateTime = (timestamp) => {
 }
 
 // ==================== 生命周期 ====================
+
+/**
+ * 页面刷新前警告
+ */
+const handleBeforeUnload = (e) => {
+  if (materializing.value) {
+    e.preventDefault()
+    e.returnValue = '物化任务进行中，确定要离开吗？'
+    return e.returnValue
+  }
+}
+
 onMounted(() => {
   // 加载特征视图列表
   featuresStore.fetchViews()
@@ -992,6 +1077,14 @@ onMounted(() => {
   loadRedisStatus()
   // 加载物化历史
   loadMaterializeHistory()
+
+  // 监听页面刷新/关闭事件
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onUnmounted(() => {
+  clearProgressTimer()
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
@@ -1008,9 +1101,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   padding: 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  background: $bg-white;
+  border-radius: $radius-md;
+  box-shadow: $shadow-card;
 
   .stat-icon {
     width: 56px;
@@ -1018,7 +1111,7 @@ onMounted(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 12px;
+    border-radius: $radius-lg;
     margin-right: 16px;
   }
 
@@ -1027,14 +1120,14 @@ onMounted(() => {
 
     .stat-label {
       font-size: 14px;
-      color: #606266;
+      color: $text-secondary;
       margin-bottom: 8px;
     }
 
     .stat-value {
       font-size: 28px;
       font-weight: 600;
-      color: #303133;
+      color: $text-primary;
     }
   }
 }
@@ -1064,7 +1157,7 @@ onMounted(() => {
     display: flex;
     align-items: center;
     gap: 4px;
-    color: #909399;
+    color: $text-muted;
     font-size: 12px;
   }
 }
@@ -1072,19 +1165,19 @@ onMounted(() => {
 .view-detail-section {
   margin-bottom: 16px;
   padding: 16px;
-  background: #f5f7fa;
-  border-radius: 4px;
+  background: $bg-gray;
+  border-radius: $radius-sm;
 }
 
 .progress-section {
   margin-top: 24px;
   padding: 20px;
-  background: #f5f7fa;
-  border-radius: 4px;
+  background: $bg-gray;
+  border-radius: $radius-sm;
 
   .divider-title {
     font-weight: 600;
-    color: #303133;
+    color: $text-primary;
   }
 
   .progress-text {
@@ -1098,12 +1191,12 @@ onMounted(() => {
 
     .info-item {
       .label {
-        color: #606266;
+        color: $text-secondary;
         font-size: 14px;
       }
 
       .value {
-        color: #303133;
+        color: $text-primary;
         font-weight: 600;
         font-size: 16px;
       }
@@ -1119,18 +1212,18 @@ onMounted(() => {
       display: flex;
       justify-content: space-between;
       padding: 8px 0;
-      border-bottom: 1px solid #ebeef5;
+      border-bottom: 1px solid $border-light;
 
       &:last-child {
         border-bottom: none;
       }
 
       .label {
-        color: #606266;
+        color: $text-secondary;
       }
 
       .value {
-        color: #303133;
+        color: $text-primary;
         font-weight: 500;
 
         &.highlight {
@@ -1155,7 +1248,7 @@ onMounted(() => {
 
         .pattern {
           font-size: 13px;
-          color: #303133;
+          color: $text-primary;
           font-family: 'Courier New', monospace;
         }
       }
@@ -1180,8 +1273,8 @@ onMounted(() => {
   .keys-list {
     max-height: 400px;
     overflow-y: auto;
-    border: 1px solid #dcdfe6;
-    border-radius: 4px;
+    border: 1px solid $border-color;
+    border-radius: $radius-sm;
     padding: 12px;
 
     .key-item {
@@ -1189,8 +1282,8 @@ onMounted(() => {
       align-items: center;
       padding: 8px;
       margin-bottom: 8px;
-      background: #f5f7fa;
-      border-radius: 4px;
+      background: $bg-gray;
+      border-radius: $radius-sm;
 
       &:last-child {
         margin-bottom: 0;
@@ -1205,21 +1298,21 @@ onMounted(() => {
         flex: 1;
         font-family: 'Courier New', monospace;
         font-size: 13px;
-        color: #303133;
+        color: $text-primary;
       }
     }
 
     .keys-empty {
       text-align: center;
       padding: 40px 0;
-      color: #909399;
+      color: $text-muted;
     }
   }
 }
 
 .divider-title {
   font-weight: 600;
-  color: #303133;
+  color: $text-primary;
 }
 
 // 响应式

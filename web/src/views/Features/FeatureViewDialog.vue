@@ -354,6 +354,7 @@ import {
   Document,
   Edit
 } from '@element-plus/icons-vue'
+import * as yaml from 'js-yaml'
 import MonacoEditor from '@/components/MonacoEditor.vue'
 import { listDataSources, getDataSourceTables, getDataSourceColumns } from '@/api/modules/datasources'
 import {
@@ -678,100 +679,32 @@ const applyYamlConfig = () => {
 }
 
 /**
- * 解析YAML或JSON格式
+ * 解析 YAML 或 JSON 格式
+ * 使用 js-yaml 处理 YAML，JSON 直接解析
  */
 const parseYamlOrJson = (text) => {
   text = text.trim()
 
-  // 尝试JSON解析
-  if (text.startsWith('{')) {
+  // 尝试 JSON 解析（以 { 或 [ 开头）
+  if (text.startsWith('{') || text.startsWith('[')) {
     return JSON.parse(text)
   }
 
-  // 简单的YAML解析（不支持复杂嵌套）
-  const lines = text.split('\n')
-  const result = {}
-  let currentObj = result
-  const stack = [{ obj: result, indent: 0 }]
-
-  for (let line of lines) {
-    if (!line.trim() || line.trim().startsWith('#')) continue
-
-    const indent = line.search(/\S/)
-    const trimmed = line.trim()
-
-    // 查找当前层级的对象
-    while (stack.length > 0 && stack[stack.length - 1].indent >= indent) {
-      stack.pop()
-    }
-
-    currentObj = stack[stack.length - 1].obj
-
-    if (trimmed.includes(':')) {
-      const [key, ...valueParts] = trimmed.split(':')
-      const value = valueParts.join(':').trim()
-
-      if (value) {
-        // 有值
-        currentObj[key.trim()] = parseValue(value)
-      } else {
-        // 没有值，创建嵌套对象
-        const newObj = {}
-        currentObj[key.trim()] = newObj
-        stack.push({ obj: newObj, indent })
-      }
-    }
-  }
-
-  return result
+  // 使用 js-yaml 解析
+  return yaml.load(text)
 }
 
 /**
- * 解析值
+ * 将对象转换为 YAML 格式
+ * 使用 js-yaml.dump 生成标准 YAML
  */
-const parseValue = (value) => {
-  value = value.trim()
-
-  // 去除引号
-  if ((value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))) {
-    return value.slice(1, -1)
-  }
-
-  // 数字
-  if (!isNaN(value)) {
-    return Number(value)
-  }
-
-  // 布尔值
-  if (value === 'true') return true
-  if (value === 'false') return false
-  if (value === 'null') return null
-
-  return value
-}
-
-/**
- * 将对象转换为简单的YAML格式
- */
-const objectToYaml = (obj, indent = 0) => {
-  const spaces = '  '.repeat(indent)
-  let yaml = ''
-
-  for (const [key, value] of Object.entries(obj)) {
-    if (value === null || value === undefined) {
-      yaml += `${spaces}${key}: null\n`
-    } else if (typeof value === 'object') {
-      yaml += `${spaces}${key}:\n`
-      yaml += objectToYaml(value, indent + 1)
-    } else if (typeof value === 'string') {
-      yaml += `${spaces}${key}: "${value}"\n`
-    } else {
-      yaml += `${spaces}${key}: ${value}\n`
-    }
-  }
-
-  return yaml
+const objectToYaml = (obj) => {
+  return yaml.dump(obj, {
+    indent: 2,
+    lineWidth: -1,
+    noRefs: true,
+    sortKeys: false
+  })
 }
 
 /**
@@ -832,7 +765,7 @@ watch(() => props.viewData, async () => {
 .form-section {
   margin-bottom: 24px;
   padding-bottom: 24px;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid $border-light;
 
   &:last-child {
     border-bottom: none;
@@ -843,7 +776,7 @@ watch(() => props.viewData, async () => {
   .section-title {
     font-size: 16px;
     font-weight: 600;
-    color: #303133;
+    color: $text-primary;
     margin: 0 0 20px 0;
     display: flex;
     align-items: center;
@@ -852,15 +785,15 @@ watch(() => props.viewData, async () => {
 
 .form-tip {
   font-size: 12px;
-  color: #909399;
+  color: $text-muted;
   margin-top: 4px;
   line-height: 1.5;
 }
 
 .yaml-preview {
-  background: #f5f7fa;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
+  background: $bg-gray;
+  border: 1px solid $border-color;
+  border-radius: $radius-sm;
   padding: 16px;
   max-height: 300px;
   overflow-y: auto;
@@ -869,7 +802,7 @@ watch(() => props.viewData, async () => {
     margin: 0;
     font-family: 'Courier New', monospace;
     font-size: 13px;
-    color: #303133;
+    color: $text-primary;
     line-height: 1.6;
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -877,8 +810,8 @@ watch(() => props.viewData, async () => {
 }
 
 .yaml-editor {
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
+  border: 1px solid $border-color;
+  border-radius: $radius-sm;
   overflow: hidden;
 }
 

@@ -650,8 +650,8 @@ if (props.modelValue && props.modelValue.length > 0) {
 <style scoped lang="scss">
 .feature-definition-config {
   padding: 20px;
-  background: #fff;
-  border-radius: 8px;
+  background: $bg-white;
+  border-radius: $radius-md;
 }
 
 .toolbar {
@@ -660,7 +660,7 @@ if (props.modelValue && props.modelValue.length > 0) {
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid $border-light;
 
   .left-actions {
     .title {
@@ -672,7 +672,7 @@ if (props.modelValue && props.modelValue.length > 0) {
 
     .subtitle {
       font-size: 13px;
-      color: #909399;
+      color: $text-muted;
     }
   }
 
@@ -696,8 +696,8 @@ if (props.modelValue && props.modelValue.length > 0) {
   gap: 24px;
   padding: 16px;
   margin-top: 16px;
-  background: #f5f7fa;
-  border-radius: 4px;
+  background: $bg-gray;
+  border-radius: $radius-sm;
 
   .stat-item {
     display: flex;
@@ -743,15 +743,15 @@ if (props.modelValue && props.modelValue.length > 0) {
 
 .template-card {
   padding: 16px;
-  background: #fff;
-  border: 1px solid #dcdfe6;
-  border-radius: 8px;
+  background: $bg-white;
+  border: 1px solid $border-color;
+  border-radius: $radius-md;
   cursor: pointer;
   transition: all 0.3s;
 
   &:hover {
     border-color: #409eff;
-    box-shadow: 0 2px 12px rgba(64, 158, 255, 0.2);
+    box-shadow: $shadow-hover;
     transform: translateY(-2px);
   }
 
