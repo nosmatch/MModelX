@@ -77,5 +77,15 @@ export default [
       parent: 'Features',
       hidden: true // 不在导航中显示
     }
+  },
+  {
+    path: '/features/definitions',
+    name: 'FeatureDefinitionConfig',
+    component: () => import('@/views/Features/FeatureDefinitionConfig.vue'),
+    meta: {
+      title: '特征定义',
+      icon: 'Document',
+      parent: 'Features'
+    }
   }
 ]

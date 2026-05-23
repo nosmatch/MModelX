@@ -1,10 +1,12 @@
 package com.mogu.data.common.entity;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import javax.persistence.*;
 import java.time.LocalDateTime;
+import org.hibernate.annotations.Type;
 
 /**
  * 数据集实体类
@@ -31,8 +33,9 @@ public class Dataset {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(nullable = false, columnDefinition = "BIGINT[]")
-    private Long[] featureViewIds;
+    @Type(type = "com.mogu.data.common.util.JsonbType")
+    @Column(name = "feature_view_ids", columnDefinition = "jsonb")
+    private JsonNode featureViewIds;
 
     @Column(nullable = false, length = 100)
     private String labelColumn;
@@ -43,14 +46,18 @@ public class Dataset {
     @Column
     private Long sampleCount;
 
+    @Column(name = "feature_count")
+    private Integer featureCount;
+
     @Column
     private Long positiveCount;
 
     @Column
     private Long negativeCount;
 
-    @Column(columnDefinition = "JSONB")
-    private String splitRatio;
+    @Type(type = "com.mogu.data.common.util.JsonbType")
+    @Column(name = "split_ratio", columnDefinition = "jsonb")
+    private JsonNode splitRatio;
 
     @Column
     private LocalDateTime startTime;

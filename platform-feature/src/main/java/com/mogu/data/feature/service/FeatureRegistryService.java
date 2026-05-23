@@ -283,10 +283,13 @@ public class FeatureRegistryService {
             feature.setSourcePath(sourcePath);
             feature.setStatus(Feature.FeatureStatus.DRAFT);
 
-            // 构建配置JSON（包含transformExpr和defaultValue）
+            // 构建配置JSON（包含transformExpr、timeWindow和defaultValue）
             com.fasterxml.jackson.databind.node.ObjectNode configNode = objectMapper.createObjectNode();
             if (featureSpec.getTransformExpr() != null) {
                 configNode.put("transformExpr", featureSpec.getTransformExpr());
+            }
+            if (featureSpec.getTimeWindow() != null) {
+                configNode.put("timeWindow", featureSpec.getTimeWindow());
             }
             if (featureSpec.getDefaultValue() != null) {
                 configNode.set("defaultValue", objectMapper.valueToTree(featureSpec.getDefaultValue()));
@@ -407,6 +410,9 @@ public class FeatureRegistryService {
         if (spec.getTransformExpr() != null) {
             configNode.put("transformExpr", spec.getTransformExpr());
         }
+        if (spec.getTimeWindow() != null) {
+            configNode.put("timeWindow", spec.getTimeWindow());
+        }
         if (spec.getDefaultValue() != null) {
             configNode.set("defaultValue", objectMapper.valueToTree(spec.getDefaultValue()));
         }
@@ -491,12 +497,15 @@ public class FeatureRegistryService {
         spec.setDtype(feature.getDtype());
         spec.setDescription(feature.getDescription());
 
-        // 从config中解析transformExpr和defaultValue
+        // 从config中解析transformExpr、timeWindow和defaultValue
         if (feature.getConfig() != null) {
             try {
                 com.fasterxml.jackson.databind.JsonNode config = feature.getConfig();
                 if (config.has("transformExpr")) {
                     spec.setTransformExpr(config.get("transformExpr").asText());
+                }
+                if (config.has("timeWindow")) {
+                    spec.setTimeWindow(config.get("timeWindow").asText());
                 }
                 if (config.has("defaultValue")) {
                     spec.setDefaultValue(objectMapper.readValue(config.get("defaultValue").toString(),

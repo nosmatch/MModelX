@@ -14,7 +14,6 @@
           :class="{ active: $route.path === '/overview' }"
           @click="navigate('/overview')"
         >
-          <span class="nav-icon">📊</span>
           <span class="nav-text">概览大盘</span>
         </div>
 
@@ -25,7 +24,7 @@
             :class="{ active: isFeaturesActive, expanded: expandedMenus.features }"
             @click="toggleMenu('features')"
           >
-            <span class="nav-icon">🔧</span>
+<!--            <span class="nav-icon">🔧</span>-->
             <span class="nav-text">特征工程</span>
             <span class="expand-icon">{{ expandedMenus.features ? '▼' : '▶' }}</span>
           </div>
@@ -68,14 +67,40 @@
           </div>
         </div>
 
-        <!-- 样本工程 -->
-        <div
-          class="nav-item"
-          :class="{ active: $route.path === '/samples' }"
-          @click="navigate('/samples')"
-        >
-          <span class="nav-icon">📦</span>
-          <span class="nav-text">样本工程</span>
+        <!-- 样本工程（可展开） -->
+        <div class="nav-group">
+          <div
+            class="nav-item group-header"
+            :class="{ active: isSamplesActive, expanded: expandedMenus.samples }"
+            @click="toggleMenu('samples')"
+          >
+<!--            <span class="nav-icon">📦</span>-->
+            <span class="nav-text">样本工程</span>
+            <span class="expand-icon">{{ expandedMenus.samples ? '▼' : '▶' }}</span>
+          </div>
+          <div v-show="expandedMenus.samples" class="nav-submenu">
+            <div
+              class="nav-item sub-item"
+              :class="{ active: $route.path === '/samples/index' }"
+              @click="navigate('/samples/index')"
+            >
+              <span class="nav-text">样本概览</span>
+            </div>
+            <div
+              class="nav-item sub-item"
+              :class="{ active: $route.path === '/samples/build' }"
+              @click="navigate('/samples/build')"
+            >
+              <span class="nav-text">样本构建</span>
+            </div>
+            <div
+              class="nav-item sub-item"
+              :class="{ active: $route.path === '/samples/datasets' }"
+              @click="navigate('/samples/datasets')"
+            >
+              <span class="nav-text">数据集管理</span>
+            </div>
+          </div>
         </div>
 
         <!-- 训练管理 -->
@@ -84,7 +109,7 @@
           :class="{ active: $route.path === '/training' }"
           @click="navigate('/training')"
         >
-          <span class="nav-icon">🎯</span>
+<!--          <span class="nav-icon">🎯</span>-->
           <span class="nav-text">训练管理</span>
         </div>
 
@@ -94,7 +119,7 @@
           :class="{ active: $route.path === '/serving' }"
           @click="navigate('/serving')"
         >
-          <span class="nav-icon">🚀</span>
+<!--          <span class="nav-icon">🚀</span>-->
           <span class="nav-text">模型部署</span>
         </div>
 
@@ -104,7 +129,7 @@
           :class="{ active: $route.path === '/datasources' }"
           @click="navigate('/datasources')"
         >
-          <span class="nav-icon">🗄️</span>
+<!--          <span class="nav-icon">🗄️</span>-->
           <span class="nav-text">数据源管理</span>
         </div>
       </nav>
@@ -154,12 +179,18 @@ const route = useRoute()
 
 // 展开的菜单
 const expandedMenus = ref({
-  features: true // 默认展开特征工程子菜单
+  features: true,  // 默认展开特征工程子菜单
+  samples: false
 })
 
 // 检查特征工程菜单是否激活
 const isFeaturesActive = computed(() => {
   return route.path.startsWith('/features')
+})
+
+// 检查样本工程菜单是否激活
+const isSamplesActive = computed(() => {
+  return route.path.startsWith('/samples')
 })
 
 // 页面标题
@@ -172,7 +203,10 @@ const pageTitle = computed(() => {
     '/features/online': '在线特征查询',
     '/features/visualization': '特征可视化',
     '/features': '特征工程',
-    '/samples': '样本工程',
+    '/samples/index': '样本概览',
+    '/samples/configs': '样本配置',
+    '/samples/build': '样本构建',
+    '/samples/datasets': '数据集管理',
     '/training': '训练管理',
     '/serving': '模型部署',
     '/datasources': '数据源管理'

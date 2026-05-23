@@ -58,7 +58,9 @@ public class PostgreSqlDataSourceAdapter implements DataSourceAdapter {
             }
 
             // 构建SQL查询
-            String sql = buildSelectQuery(table, columns, dateColumn, partitionDate);
+            String startDate = (String) configMap.get("startDate");
+            String endDate = (String) configMap.get("endDate");
+            String sql = buildSelectQuery(table, columns, dateColumn, partitionDate, startDate, endDate);
 
             log.info("Executing SQL: {}", sql);
             log.debug("Reading from table: {} for date: {}", table, partitionDate);
@@ -94,11 +96,18 @@ public class PostgreSqlDataSourceAdapter implements DataSourceAdapter {
      * 构建SELECT查询
      */
     private String buildSelectQuery(String table, List<String> columns,
-                                     String dateColumn, LocalDate partitionDate) {
+                                     String dateColumn, LocalDate partitionDate,
+                                     String startDate, String endDate) {
         String columnList = String.join(", ", columns);
+        String whereClause;
+        if (startDate != null && !startDate.isEmpty() && endDate != null && !endDate.isEmpty()) {
+            whereClause = String.format("DATE(%s) BETWEEN '%s' AND '%s'", dateColumn, startDate, endDate);
+        } else {
+            whereClause = String.format("DATE(%s) = '%s'", dateColumn, partitionDate);
+        }
         return String.format(
-            "SELECT %s FROM %s WHERE DATE(%s) = '%s' ORDER BY %s",
-            columnList, table, dateColumn, partitionDate, dateColumn
+            "SELECT %s FROM %s WHERE %s ORDER BY %s",
+            columnList, table, whereClause, dateColumn
         );
     }
 

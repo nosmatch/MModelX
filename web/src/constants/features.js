@@ -122,6 +122,25 @@ export const FeatureDataTypeOptions = Object.freeze(
   }))
 )
 
+// ==================== 时间窗口选项 ====================
+
+/**
+ * 特征时间窗口选项
+ */
+export const TimeWindowOptions = Object.freeze([
+  { value: '', label: '无' },
+  { value: '1h', label: '1小时' },
+  { value: '6h', label: '6小时' },
+  { value: '12h', label: '12小时' },
+  { value: '1d', label: '1天' },
+  { value: '3d', label: '3天' },
+  { value: '7d', label: '7天' },
+  { value: '14d', label: '14天' },
+  { value: '30d', label: '30天' },
+  { value: '60d', label: '60天' },
+  { value: '90d', label: '90天' }
+])
+
 // ==================== Transform 表达式类型 ====================
 
 /**
@@ -398,6 +417,7 @@ export default {
   FeatureDataTypes,
   FeatureDataTypeLabels,
   FeatureDataTypeOptions,
+  TimeWindowOptions,
   TransformTypes,
   TransformTypeLabels,
   TransformTypeGroups,

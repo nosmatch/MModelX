@@ -58,6 +58,14 @@
           刷新
         </el-button>
 
+        <!-- 批量定义特征按钮 -->
+        <el-button
+          :icon="DocumentAdd"
+          @click="handleBatchDefine"
+        >
+          批量定义特征
+        </el-button>
+
         <!-- 创建新视图按钮 -->
         <el-button
           type="primary"
@@ -275,6 +283,7 @@ import {
   Refresh,
   Plus,
   Document,
+  DocumentAdd,
   View,
   Edit,
   Delete
@@ -390,6 +399,15 @@ const handleFilterChange = () => {
 const handleRefresh = () => {
   loadViews()
   ElMessage.success('刷新成功')
+}
+
+/**
+ * 批量定义特征
+ */
+const handleBatchDefine = () => {
+  router.push({
+    name: 'FeatureDefinitionConfig'
+  })
 }
 
 /**

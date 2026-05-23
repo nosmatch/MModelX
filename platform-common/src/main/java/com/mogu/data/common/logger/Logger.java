@@ -25,7 +25,7 @@ public class Logger {
     }
 
     public void info(String format, Object... args) {
-        logger.log(Level.INFO, String.format(format, args));
+        logger.log(Level.INFO, formatMessage(format, args));
     }
 
     public void debug(String message) {
@@ -33,7 +33,7 @@ public class Logger {
     }
 
     public void debug(String format, Object... args) {
-        logger.log(Level.FINE, String.format(format, args));
+        logger.log(Level.FINE, formatMessage(format, args));
     }
 
     public void warn(String message) {
@@ -41,7 +41,7 @@ public class Logger {
     }
 
     public void warn(String format, Object... args) {
-        logger.log(Level.WARNING, String.format(format, args));
+        logger.log(Level.WARNING, formatMessage(format, args));
     }
 
     public void warn(String message, Throwable throwable) {
@@ -53,7 +53,15 @@ public class Logger {
     }
 
     public void error(String format, Object... args) {
-        logger.log(Level.SEVERE, String.format(format, args));
+        logger.log(Level.SEVERE, formatMessage(format, args));
+    }
+
+    private String formatMessage(String format, Object... args) {
+        String result = format;
+        for (Object arg : args) {
+            result = result.replaceFirst("\\{\\}", arg != null ? arg.toString() : "null");
+        }
+        return result;
     }
 
     public void error(String message, Throwable throwable) {

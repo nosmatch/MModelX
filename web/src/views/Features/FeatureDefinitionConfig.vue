@@ -1,5 +1,42 @@
 <template>
   <div class="feature-definition-config">
+    <!-- 页面头部 -->
+    <div class="page-header">
+      <div class="header-left">
+        <el-button :icon="ArrowLeft" @click="goBack">返回</el-button>
+        <h2 class="page-title">特征定义配置</h2>
+      </div>
+      <div class="header-right">
+        <el-select
+          v-model="selectedViewName"
+          placeholder="选择特征视图"
+          clearable
+          style="width: 260px; margin-right: 12px"
+        >
+          <el-option
+            v-for="view in viewOptions"
+            :key="view.value"
+            :label="view.label"
+            :value="view.value"
+          >
+            <div class="view-option">
+              <span>{{ view.label }}</span>
+              <el-tag size="small" type="info">{{ view.entity }}</el-tag>
+            </div>
+          </el-option>
+        </el-select>
+        <el-button
+          type="primary"
+          :icon="Check"
+          :loading="saving"
+          :disabled="!canSave"
+          @click="handleSave"
+        >
+          保存到特征视图
+        </el-button>
+      </div>
+    </div>
+
     <!-- 工具栏 -->
     <div class="toolbar">
       <div class="left-actions">
@@ -104,6 +141,33 @@
               {{ row.transformExpr || '未配置' }}
             </el-tag>
           </div>
+        </template>
+      </el-table-column>
+
+      <!-- 时间窗口 -->
+      <el-table-column
+        prop="timeWindow"
+        label="时间窗口"
+        width="130"
+      >
+        <template #header>
+          <el-tooltip content="聚合类特征（sum/avg/count等）建议设置，不选则使用全部历史数据">
+            <span>时间窗口 <el-icon><QuestionFilled /></el-icon></span>
+          </el-tooltip>
+        </template>
+        <template #default="{ row }">
+          <el-select
+            v-model="row.timeWindow"
+            placeholder="选择窗口"
+            clearable
+          >
+            <el-option
+              v-for="opt in TimeWindowOptions"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
         </template>
       </el-table-column>
 
@@ -253,6 +317,7 @@
   {
     "name": "total_orders",
     "transformExpr": "sum(order_amount)",
+    "timeWindow": "7d",
     "dtype": "FLOAT64",
     "defaultValue": 0
   }
@@ -300,7 +365,8 @@
  * @author MModelX Team
  * @since 2026-05-20
  */
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Plus,
@@ -311,14 +377,20 @@ import {
   TrendCharts,
   Money,
   Timer,
-  DataAnalysis
+  DataAnalysis,
+  QuestionFilled,
+  ArrowLeft,
+  Check
 } from '@element-plus/icons-vue'
 import MonacoEditor from '@/components/MonacoEditor.vue'
+import { useFeaturesStore } from '@/stores/features'
+import { registerFeatureDefinition } from '@/api/modules/features'
 import {
   TransformTypeOptions,
   TransformTypeGroups,
   TransformTypeGroupLabels,
   FeatureDataTypeOptions,
+  TimeWindowOptions,
   ValidationPatterns,
   ValidationMessages
 } from '@/constants/features'
@@ -334,10 +406,38 @@ const props = defineProps({
 // ==================== Emits ====================
 const emit = defineEmits(['update:modelValue'])
 
+// ==================== 路由和Store ====================
+const router = useRouter()
+const route = useRoute()
+const featuresStore = useFeaturesStore()
+
 // ==================== 响应式数据 ====================
 const features = ref([])
 const showImportDialog = ref(false)
 const importJson = ref('')
+const selectedViewName = ref('')
+const saving = ref(false)
+
+// ==================== 计算属性 ====================
+/**
+ * 可选的特征视图列表
+ */
+const viewOptions = computed(() => {
+  return featuresStore.views.map(v => ({
+    label: v.name,
+    value: v.name,
+    entity: v.entity
+  }))
+})
+
+/**
+ * 是否可以保存
+ */
+const canSave = computed(() => {
+  return selectedViewName.value &&
+    features.value.length > 0 &&
+    features.value.some(f => f.name && f.transformExpr && f.dtype)
+})
 
 // ==================== 计算属性 ====================
 /**
@@ -426,6 +526,7 @@ const handleAddFeature = () => {
     transformType: '',
     transformColumn: '',
     transformExpr: '',
+    timeWindow: '',
     dtype: 'FLOAT64',
     defaultValue: '',
     description: ''
@@ -496,6 +597,7 @@ const handleAddFromTemplate = (template) => {
       transformType: feature.transformType,
       transformColumn: feature.transformColumn,
       transformExpr: feature.transformExpr,
+      timeWindow: feature.timeWindow || '',
       dtype: feature.dtype,
       defaultValue: feature.defaultValue,
       description: feature.description
@@ -512,26 +614,26 @@ const handleAddFromTemplate = (template) => {
 const getTemplateFeatures = (templateName) => {
   const templates = {
     aggregate: [
-      { name: 'total_count', transformType: 'count', transformColumn: 'id', dtype: 'INT64', defaultValue: 0, description: '记录总数' },
-      { name: 'total_sum', transformType: 'sum', transformColumn: 'amount', dtype: 'FLOAT64', defaultValue: 0, description: '总和' },
-      { name: 'average_value', transformType: 'avg', transformColumn: 'amount', dtype: 'FLOAT64', defaultValue: 0, description: '平均值' },
-      { name: 'max_value', transformType: 'max', transformColumn: 'amount', dtype: 'FLOAT64', defaultValue: 0, description: '最大值' },
-      { name: 'min_value', transformType: 'min', transformColumn: 'amount', dtype: 'FLOAT64', defaultValue: 0, description: '最小值' }
+      { name: 'total_count', transformType: 'count', transformColumn: 'id', timeWindow: '7d', dtype: 'INT64', defaultValue: 0, description: '记录总数' },
+      { name: 'total_sum', transformType: 'sum', transformColumn: 'amount', timeWindow: '7d', dtype: 'FLOAT64', defaultValue: 0, description: '总和' },
+      { name: 'average_value', transformType: 'avg', transformColumn: 'amount', timeWindow: '7d', dtype: 'FLOAT64', defaultValue: 0, description: '平均值' },
+      { name: 'max_value', transformType: 'max', transformColumn: 'amount', timeWindow: '7d', dtype: 'FLOAT64', defaultValue: 0, description: '最大值' },
+      { name: 'min_value', transformType: 'min', transformColumn: 'amount', timeWindow: '7d', dtype: 'FLOAT64', defaultValue: 0, description: '最小值' }
     ],
     financial: [
-      { name: 'total_amount', transformType: 'sum', transformColumn: 'order_amount', dtype: 'FLOAT64', defaultValue: 0, description: '总金额' },
-      { name: 'avg_order_value', transformType: 'avg', transformColumn: 'order_amount', dtype: 'FLOAT64', defaultValue: 0, description: '平均订单金额' },
-      { name: 'last_order_amount', transformType: 'last', transformColumn: 'order_amount', dtype: 'FLOAT64', defaultValue: 0, description: '最后一次订单金额' }
+      { name: 'total_amount', transformType: 'sum', transformColumn: 'order_amount', timeWindow: '30d', dtype: 'FLOAT64', defaultValue: 0, description: '总金额' },
+      { name: 'avg_order_value', transformType: 'avg', transformColumn: 'order_amount', timeWindow: '30d', dtype: 'FLOAT64', defaultValue: 0, description: '平均订单金额' },
+      { name: 'last_order_amount', transformType: 'last', transformColumn: 'order_amount', timeWindow: '', dtype: 'FLOAT64', defaultValue: 0, description: '最后一次订单金额' }
     ],
     temporal: [
-      { name: 'first_event_time', transformType: 'first', transformColumn: 'timestamp', dtype: 'INT64', defaultValue: 0, description: '首次事件时间' },
-      { name: 'last_event_time', transformType: 'last', transformColumn: 'timestamp', dtype: 'INT64', defaultValue: 0, description: '最后事件时间' },
-      { name: 'time_span', transformType: 'last', transformColumn: 'timestamp', dtype: 'INT64', defaultValue: 0, description: '时间跨度' }
+      { name: 'first_event_time', transformType: 'first', transformColumn: 'timestamp', timeWindow: '', dtype: 'INT64', defaultValue: 0, description: '首次事件时间' },
+      { name: 'last_event_time', transformType: 'last', transformColumn: 'timestamp', timeWindow: '', dtype: 'INT64', defaultValue: 0, description: '最后事件时间' },
+      { name: 'time_span', transformType: 'last', transformColumn: 'timestamp', timeWindow: '', dtype: 'INT64', defaultValue: 0, description: '时间跨度' }
     ],
     behavior: [
-      { name: 'click_count', transformType: 'count', transformColumn: 'click_event', dtype: 'INT64', defaultValue: 0, description: '点击次数' },
-      { name: 'view_count', transformType: 'count', transformColumn: 'view_event', dtype: 'INT64', defaultValue: 0, description: '浏览次数' },
-      { name: 'conversion_rate', transformType: 'avg', transformColumn: 'is_converted', dtype: 'FLOAT64', defaultValue: 0, description: '转化率' }
+      { name: 'click_count', transformType: 'count', transformColumn: 'click_event', timeWindow: '7d', dtype: 'INT64', defaultValue: 0, description: '点击次数' },
+      { name: 'view_count', transformType: 'count', transformColumn: 'view_event', timeWindow: '7d', dtype: 'INT64', defaultValue: 0, description: '浏览次数' },
+      { name: 'conversion_rate', transformType: 'avg', transformColumn: 'is_converted', timeWindow: '30d', dtype: 'FLOAT64', defaultValue: 0, description: '转化率' }
     ]
   }
 
@@ -556,6 +658,7 @@ const handleImport = () => {
         features.value.push({
           name: feature.name,
           transformExpr: feature.transformExpr,
+          timeWindow: feature.timeWindow || '',
           dtype: feature.dtype || 'FLOAT64',
           defaultValue: feature.defaultValue || '',
           description: feature.description || '',
@@ -600,6 +703,7 @@ const handleExport = () => {
   const exportData = features.value.map(f => ({
     name: f.name,
     transformExpr: f.transformExpr,
+    timeWindow: f.timeWindow,
     dtype: f.dtype,
     defaultValue: f.defaultValue,
     description: f.description
@@ -645,6 +749,81 @@ if (props.modelValue && props.modelValue.length > 0) {
     transformColumn: parseTransformColumn(f.transformExpr)
   }))
 }
+
+/**
+ * 返回上一页
+ */
+const goBack = () => {
+  router.back()
+}
+
+/**
+ * 保存特征定义到特征视图
+ */
+const handleSave = async () => {
+  if (!selectedViewName.value) {
+    ElMessage.warning('请选择特征视图')
+    return
+  }
+
+  const validFeatures = features.value.filter(f => f.name && f.transformExpr && f.dtype)
+  if (validFeatures.length === 0) {
+    ElMessage.warning('请至少配置一个完整的特征')
+    return
+  }
+
+  // 查找选中的视图信息
+  const selectedView = featuresStore.views.find(v => v.name === selectedViewName.value)
+  if (!selectedView) {
+    ElMessage.warning('特征视图不存在')
+    return
+  }
+
+  saving.value = true
+  try {
+    const definition = {
+      featureView: selectedViewName.value,
+      entity: selectedView.entity || '',
+      features: validFeatures.map(f => ({
+        name: f.name,
+        dtype: f.dtype,
+        transformExpr: f.transformExpr,
+        timeWindow: f.timeWindow || undefined,
+        description: f.description,
+        defaultValue: f.defaultValue || undefined
+      })),
+      source: {
+        type: 'unknown',
+        path: null
+      }
+    }
+
+    await registerFeatureDefinition(definition)
+    ElMessage.success(`成功保存 ${validFeatures.length} 个特征定义到「${selectedViewName.value}」`)
+
+    // 清空当前列表
+    features.value = []
+    selectedViewName.value = ''
+  } catch (error) {
+    ElMessage.error('保存失败: ' + (error.message || '未知错误'))
+  } finally {
+    saving.value = false
+  }
+}
+
+// ==================== 生命周期 ====================
+onMounted(async () => {
+  // 加载特征视图列表
+  if (featuresStore.views.length === 0) {
+    await featuresStore.fetchViews()
+  }
+
+  // 如果URL带 view 参数，预选中
+  const viewParam = route.query.view
+  if (viewParam) {
+    selectedViewName.value = viewParam
+  }
+})
 </script>
 
 <style scoped lang="scss">
@@ -652,6 +831,40 @@ if (props.modelValue && props.modelValue.length > 0) {
   padding: 20px;
   background: $bg-white;
   border-radius: $radius-md;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid $border-light;
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+
+    .page-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #303133;
+      margin: 0;
+    }
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+  }
+}
+
+.view-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .toolbar {
@@ -797,6 +1010,15 @@ if (props.modelValue && props.modelValue.length > 0) {
 
 // 响应式
 @media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    gap: 12px;
+
+    .header-right {
+      width: 100%;
+    }
+  }
+
   .toolbar {
     flex-direction: column;
     align-items: stretch;

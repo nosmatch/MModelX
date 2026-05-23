@@ -79,6 +79,17 @@ public class FeatureComputeService {
                 sourceConfig = new HashMap<>();
             }
             enrichWithDataSourceConnection(sourceConfig, featureViewName);
+
+            // 根据最大时间窗口计算数据读取范围
+            int maxWindowDays = getMaxWindowDays(definition.getFeatures());
+            if (maxWindowDays > 0) {
+                LocalDate startDate = partitionDate.minusDays(maxWindowDays);
+                sourceConfig.put("startDate", startDate.toString());
+                sourceConfig.put("endDate", partitionDate.toString());
+                log.info("特征视图 {} 最大时间窗口: {} 天, 读取数据范围: {} ~ {}",
+                    featureViewName, maxWindowDays, startDate, partitionDate);
+            }
+
             String configJson = convertConfigToJson(sourceConfig);
 
             Map<String, List<Map<String, Object>>> rawData = adapter.readData(configJson, partitionDate);
@@ -93,7 +104,8 @@ public class FeatureComputeService {
 
                 Map<String, Object> features = computeEngine.compute(
                     entityData,
-                    definition.getFeatures()
+                    definition.getFeatures(),
+                    partitionDate
                 );
 
                 // 添加元数据
@@ -782,5 +794,45 @@ public class FeatureComputeService {
             log.error("获取已物化视图数量失败: " + e.getMessage());
             return 0;
         }
+    }
+
+    /**
+     * 从特征列表中提取最大时间窗口天数
+     *
+     * @param features 特征规格列表
+     * @return 最大时间窗口天数，无时间窗口返回 0
+     */
+    private int getMaxWindowDays(List<FeatureDefinition.FeatureSpec> features) {
+        if (features == null || features.isEmpty()) {
+            return 0;
+        }
+
+        int maxDays = 0;
+        for (FeatureDefinition.FeatureSpec spec : features) {
+            String timeWindow = spec.getTimeWindow();
+            if (timeWindow == null || timeWindow.isEmpty()) {
+                continue;
+            }
+
+            try {
+                String tw = timeWindow.trim().toLowerCase();
+                int days = 0;
+                if (tw.endsWith("d")) {
+                    days = Integer.parseInt(tw.substring(0, tw.length() - 1));
+                } else if (tw.endsWith("w")) {
+                    days = Integer.parseInt(tw.substring(0, tw.length() - 1)) * 7;
+                } else if (tw.endsWith("h")) {
+                    days = 1; // 小于1天按1天算
+                } else if (tw.endsWith("m")) {
+                    days = 1; // 小于1天按1天算
+                }
+                if (days > maxDays) {
+                    maxDays = days;
+                }
+            } catch (NumberFormatException e) {
+                log.warn("无法解析时间窗口: {}", timeWindow);
+            }
+        }
+        return maxDays;
     }
 }

@@ -97,76 +97,34 @@
                 </el-select>
               </div>
               <div class="top-right">
-                <span class="section-title">快捷操作</span>
+                <el-button size="small" @click="selectAllFeatures">全选</el-button>
+                <el-button size="small" @click="clearAllFeatures">清空</el-button>
+                <el-button size="small" type="primary" @click="saveAsBookmark">
+                  保存为收藏
+                </el-button>
               </div>
             </div>
 
             <!-- 底部内容行 -->
             <div class="selector-bottom">
-              <div class="selector-left">
-                <el-transfer
-                  v-model="queryForm.featureNames"
-                  :data="availableFeatures"
-                  :titles="['可选特征', '已选特征']"
-                  filterable
-                  filter-placeholder="搜索特征"
-                  style="width: 100%"
-                  class="feature-transfer"
-                >
-                  <template #default="{ option }">
-                    <div class="transfer-item">
-                      <span class="feature-name">{{ option.label }}</span>
-                      <el-tag size="small" :type="getDataTypeTagType(option.dtype)">
-                        {{ option.dtype }}
-                      </el-tag>
-                    </div>
-                  </template>
-                </el-transfer>
-              </div>
-
-              <div class="selector-right">
-                <div class="quick-select">
-                  <!-- 已选特征预览 -->
-                  <div class="feature-group">
-                    <div class="group-title">
-                      已选特征
-                      <el-tag size="small" type="success">{{ queryForm.featureNames.length }}</el-tag>
-                    </div>
-                    <div class="selected-features-list">
-                      <el-tag
-                        v-for="featureName in queryForm.featureNames.slice(0, 15)"
-                        :key="featureName"
-                        size="small"
-                        closable
-                        @close="removeFeature(featureName)"
-                        style="margin: 2px"
-                      >
-                        {{ featureName }}
-                      </el-tag>
-                      <el-tag
-                        v-if="queryForm.featureNames.length > 15"
-                        size="small"
-                        type="info"
-                        style="margin: 2px"
-                      >
-                        +{{ queryForm.featureNames.length - 15 }}
-                      </el-tag>
-                      <div v-if="queryForm.featureNames.length === 0" class="no-selection">
-                        暂无选择
-                      </div>
-                    </div>
+              <el-transfer
+                v-model="queryForm.featureNames"
+                :data="availableFeatures"
+                :titles="['可选特征', '已选特征']"
+                filterable
+                filter-placeholder="搜索特征"
+                style="width: 100%"
+                class="feature-transfer"
+              >
+                <template #default="{ option }">
+                  <div class="transfer-item">
+                    <span class="feature-name">{{ option.label }}</span>
+                    <el-tag size="small" :type="getDataTypeTagType(option.dtype)">
+                      {{ option.dtype }}
+                    </el-tag>
                   </div>
-
-                  <!-- 选择操作 -->
-                  <div class="select-actions">
-                    <el-button size="small" @click="selectAllFeatures">全选</el-button>
-                    <el-button size="small" @click="clearAllFeatures">清空</el-button>
-                    <el-button size="small" type="primary" @click="saveAsBookmark">
-                      保存为收藏
-                    </el-button>
-                  </div>
-                </div>
-              </div>
+                </template>
+              </el-transfer>
             </div>
           </div>
         </el-form-item>
@@ -817,16 +775,6 @@ const clearAllFeatures = () => {
 }
 
 /**
- * 移除单个已选特征
- */
-const removeFeature = (featureName) => {
-  const idx = queryForm.value.featureNames.indexOf(featureName)
-  if (idx !== -1) {
-    queryForm.value.featureNames.splice(idx, 1)
-  }
-}
-
-/**
  * 复制特征值
  */
 const copyFeatureValue = (row) => {
@@ -988,52 +936,38 @@ onMounted(async () => {
     .top-right {
       width: 280px;
       flex-shrink: 0;
-    }
-
-    .section-title {
-      font-weight: 600;
-      color: $text-primary;
-      font-size: 14px;
+      display: flex;
+      gap: 8px;
     }
   }
 
   .selector-bottom {
-    display: flex;
-    gap: 20px;
-    align-items: stretch;
     min-height: 380px;
 
-    .selector-left {
-      flex: 1;
-      min-width: 0;
+    .feature-transfer {
+      height: 100%;
 
-      .feature-transfer {
+      :deep(.el-transfer) {
         height: 100%;
+        justify-content: center;
+        gap: 12px;
 
-        :deep(.el-transfer-panel) {
-          width: 42%;
-        }
-
-        :deep(.el-transfer__buttons) {
-          width: 16%;
-          padding: 0 8px;
-        }
-
-        :deep(.el-transfer) {
+        .el-transfer-panel {
           height: 100%;
+          width: 380px !important;
+        }
 
-          .el-transfer-panel {
-            height: 100%;
+        .el-transfer__buttons {
+          padding: 0 4px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+
+          .el-transfer__button {
+            margin: 0;
           }
         }
       }
-    }
-
-    .selector-right {
-      width: 280px;
-      flex-shrink: 0;
-      display: flex;
-      flex-direction: column;
     }
   }
 }
@@ -1064,57 +998,6 @@ onMounted(async () => {
   }
 }
 
-.quick-select {
-  padding: 16px;
-  background: $bg-gray;
-  border-radius: $radius-sm;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-
-  .feature-group {
-    margin-bottom: 16px;
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-
-    .group-title {
-      font-size: 13px;
-      color: $text-secondary;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-  }
-
-  .selected-features-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    overflow-y: auto;
-    padding: 4px;
-    flex: 1;
-    min-height: 0;
-    align-content: flex-start;
-
-    .no-selection {
-      color: $text-muted;
-      font-size: 13px;
-      padding: 8px 0;
-    }
-  }
-
-  .select-actions {
-    display: flex;
-    gap: 8px;
-    padding-top: 12px;
-    border-top: 1px solid $border-color;
-    margin-top: auto;
-    flex-shrink: 0;
-  }
-}
 
 .result-card {
   margin-top: 20px;
@@ -1325,12 +1208,7 @@ onMounted(async () => {
     }
 
     .selector-bottom {
-      flex-direction: column;
       min-height: auto;
-
-      .selector-right {
-        width: 100%;
-      }
     }
   }
 }
@@ -1345,10 +1223,5 @@ onMounted(async () => {
     gap: 12px;
   }
 
-  .quick-select {
-    .checkbox-list {
-      max-height: 200px;
-    }
-  }
 }
 </style>

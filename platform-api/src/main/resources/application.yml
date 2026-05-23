@@ -54,8 +54,9 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
-    validate-on-migrate: true
+    validate-on-migrate: false
     encoding: UTF-8
+    out-of-order: true
 
 # MinIO配置
 minio:

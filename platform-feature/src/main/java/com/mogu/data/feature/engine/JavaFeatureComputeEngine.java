@@ -4,6 +4,10 @@ import com.mogu.data.common.logger.Logger;
 import com.mogu.data.feature.entity.FeatureDefinition;
 import org.springframework.stereotype.Component;
 
+import java.sql.Timestamp;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -25,6 +29,14 @@ public class JavaFeatureComputeEngine implements FeatureComputeEngine {
     public Map<String, Object> compute(
             List<Map<String, Object>> entityData,
             List<FeatureDefinition.FeatureSpec> featureSpecs) {
+        return compute(entityData, featureSpecs, LocalDate.now());
+    }
+
+    @Override
+    public Map<String, Object> compute(
+            List<Map<String, Object>> entityData,
+            List<FeatureDefinition.FeatureSpec> featureSpecs,
+            LocalDate partitionDate) {
 
         if (entityData == null || entityData.isEmpty()) {
             log.warn("实体数据为空，返回空特征");
@@ -35,11 +47,18 @@ public class JavaFeatureComputeEngine implements FeatureComputeEngine {
 
         for (FeatureDefinition.FeatureSpec spec : featureSpecs) {
             try {
+                // 按时间窗口过滤数据
+                List<Map<String, Object>> filteredData = filterByTimeWindow(
+                    entityData, spec.getTimeWindow(), partitionDate
+                );
+
                 String expr = spec.getTransformExpr();
-                Object value = evaluateExpression(expr, entityData);
+                Object value = evaluateExpression(expr, filteredData);
                 result.put(spec.getName(), value);
 
-                log.debug("计算特征 {} = {}", spec.getName(), value);
+                log.debug("计算特征 {} = {} (窗口: {}, 原始行数: {}, 过滤后: {})",
+                    spec.getName(), value, spec.getTimeWindow(),
+                    entityData.size(), filteredData.size());
 
             } catch (Exception e) {
                 log.error("计算特征失败: {} - {}", spec.getName(), e.getMessage(), e);
@@ -294,5 +313,193 @@ public class JavaFeatureComputeEngine implements FeatureComputeEngine {
             default:
                 return null;
         }
+    }
+
+    // ==================== 时间窗口过滤 ====================
+
+    /**
+     * 按时间窗口过滤数据
+     *
+     * @param data 原始数据
+     * @param timeWindow 时间窗口字符串（如 "7d", "30d", "1h"）
+     * @param partitionDate 分区日期（基准日期）
+     * @return 过滤后的数据
+     */
+    private List<Map<String, Object>> filterByTimeWindow(
+            List<Map<String, Object>> data, String timeWindow, LocalDate partitionDate) {
+        if (timeWindow == null || timeWindow.isEmpty() || data == null || data.isEmpty()) {
+            return data;
+        }
+
+        Duration windowDuration = parseTimeWindow(timeWindow);
+        if (windowDuration == null || windowDuration.isZero() || windowDuration.isNegative()) {
+            return data;
+        }
+
+        String timestampField = findTimestampField(data);
+        if (timestampField == null) {
+            log.warn("无法识别时间戳字段，跳过时间窗口过滤: {}", timeWindow);
+            return data;
+        }
+
+        LocalDateTime cutoff = partitionDate.atStartOfDay().minus(windowDuration);
+
+        List<Map<String, Object>> filtered = data.stream()
+            .filter(row -> {
+                Object tsValue = row.get(timestampField);
+                if (tsValue == null) {
+                    return false;
+                }
+                LocalDateTime rowTime = parseTimestamp(tsValue);
+                if (rowTime == null) {
+                    return false;
+                }
+                return !rowTime.isBefore(cutoff);
+            })
+            .collect(Collectors.toList());
+
+        log.debug("时间窗口过滤: {} -> 原始 {} 行, 过滤后 {} 行", timeWindow, data.size(), filtered.size());
+        return filtered;
+    }
+
+    /**
+     * 解析时间窗口字符串
+     *
+     * @param timeWindow 如 "7d", "1h", "30d", "90d"
+     * @return Duration
+     */
+    private Duration parseTimeWindow(String timeWindow) {
+        if (timeWindow == null || timeWindow.isEmpty()) {
+            return null;
+        }
+
+        timeWindow = timeWindow.trim().toLowerCase();
+        try {
+            if (timeWindow.endsWith("d")) {
+                int days = Integer.parseInt(timeWindow.substring(0, timeWindow.length() - 1));
+                return Duration.ofDays(days);
+            } else if (timeWindow.endsWith("h")) {
+                int hours = Integer.parseInt(timeWindow.substring(0, timeWindow.length() - 1));
+                return Duration.ofHours(hours);
+            } else if (timeWindow.endsWith("w")) {
+                int weeks = Integer.parseInt(timeWindow.substring(0, timeWindow.length() - 1));
+                return Duration.ofDays(weeks * 7L);
+            } else if (timeWindow.endsWith("m")) {
+                int minutes = Integer.parseInt(timeWindow.substring(0, timeWindow.length() - 1));
+                return Duration.ofMinutes(minutes);
+            }
+        } catch (NumberFormatException e) {
+            log.warn("无法解析时间窗口: {}", timeWindow);
+        }
+        return null;
+    }
+
+    /**
+     * 识别时间戳字段名
+     *
+     * @param data 数据行列表
+     * @return 时间戳字段名，未找到返回 null
+     */
+    private String findTimestampField(List<Map<String, Object>> data) {
+        if (data == null || data.isEmpty()) {
+            return null;
+        }
+
+        Map<String, Object> firstRow = data.get(0);
+        if (firstRow == null || firstRow.isEmpty()) {
+            return null;
+        }
+
+        // 常见时间戳字段名，按优先级排序
+        String[] candidates = {
+            "timestamp", "created_at", "event_time", "order_date",
+            "ts", "date", "time", "datetime", "event_date",
+            "created_time", "updated_at", "updated_time"
+        };
+
+        for (String candidate : candidates) {
+            if (firstRow.containsKey(candidate)) {
+                return candidate;
+            }
+        }
+
+        // 如果常见字段名都不匹配，尝试查找包含时间戳值的字段
+        for (Map.Entry<String, Object> entry : firstRow.entrySet()) {
+            if (entry.getValue() instanceof Timestamp ||
+                entry.getValue() instanceof java.sql.Date ||
+                entry.getValue() instanceof LocalDateTime ||
+                entry.getValue() instanceof LocalDate) {
+                return entry.getKey();
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 解析时间戳值
+     *
+     * @param value 原始值
+     * @return LocalDateTime，解析失败返回 null
+     */
+    private LocalDateTime parseTimestamp(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        try {
+            if (value instanceof Timestamp) {
+                return ((Timestamp) value).toLocalDateTime();
+            }
+            if (value instanceof java.sql.Date) {
+                return ((java.sql.Date) value).toLocalDate().atStartOfDay();
+            }
+            if (value instanceof LocalDateTime) {
+                return (LocalDateTime) value;
+            }
+            if (value instanceof LocalDate) {
+                return ((LocalDate) value).atStartOfDay();
+            }
+            if (value instanceof Instant) {
+                return LocalDateTime.ofInstant((Instant) value, ZoneId.systemDefault());
+            }
+            if (value instanceof Number) {
+                long millis = ((Number) value).longValue();
+                // 自动判断是毫秒还是秒
+                if (millis > 1_000_000_000_000L) {
+                    return LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault());
+                } else {
+                    return LocalDateTime.ofInstant(Instant.ofEpochSecond(millis), ZoneId.systemDefault());
+                }
+            }
+            if (value instanceof String) {
+                String str = ((String) value).trim();
+                // 尝试多种日期格式
+                DateTimeFormatter[] formatters = {
+                    DateTimeFormatter.ISO_LOCAL_DATE_TIME,
+                    DateTimeFormatter.ISO_DATE_TIME,
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.S"),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd"),
+                    DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"),
+                    DateTimeFormatter.ofPattern("yyyy/MM/dd")
+                };
+                for (DateTimeFormatter formatter : formatters) {
+                    try {
+                        if (str.contains("T") || str.contains(":")) {
+                            return LocalDateTime.parse(str, formatter);
+                        } else {
+                            return LocalDate.parse(str, formatter).atStartOfDay();
+                        }
+                    } catch (DateTimeParseException ignored) {
+                        // 继续尝试下一个格式
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("解析时间戳失败: {} (类型: {})", value, value.getClass().getName());
+        }
+
+        return null;
     }
 }

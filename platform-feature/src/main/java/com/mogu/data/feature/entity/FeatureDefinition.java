@@ -83,6 +83,7 @@ public class FeatureDefinition {
         private String dtype;
         private String description;
         private String transformExpr;
+        private String timeWindow;
         private Map<String, Object> defaultValue;
 
         // Getters and Setters
@@ -116,6 +117,14 @@ public class FeatureDefinition {
 
         public void setTransformExpr(String transformExpr) {
             this.transformExpr = transformExpr;
+        }
+
+        public String getTimeWindow() {
+            return timeWindow;
+        }
+
+        public void setTimeWindow(String timeWindow) {
+            this.timeWindow = timeWindow;
         }
 
         public Map<String, Object> getDefaultValue() {

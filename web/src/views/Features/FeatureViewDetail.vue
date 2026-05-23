@@ -55,6 +55,9 @@
         <el-button type="primary" :icon="Edit" @click="handleEdit">
           编辑视图
         </el-button>
+        <el-button :icon="DocumentAdd" @click="handleBatchDefine">
+          批量定义特征
+        </el-button>
         <el-button :icon="Operation" @click="handleCompute">
           计算特征
         </el-button>
@@ -165,7 +168,8 @@ import {
   View,
   DataAnalysis,
   Delete,
-  Plus
+  Plus,
+  DocumentAdd
 } from '@element-plus/icons-vue'
 import { useFeaturesStore } from '@/stores/features'
 import FeatureDialog from './FeatureDialog.vue'
@@ -214,6 +218,16 @@ const goBack = () => {
  */
 const handleEdit = () => {
   ElMessage.info('编辑功能开发中')
+}
+
+/**
+ * 批量定义特征
+ */
+const handleBatchDefine = () => {
+  router.push({
+    name: 'FeatureDefinitionConfig',
+    query: { view: viewDetail.value.name }
+  })
 }
 
 /**
