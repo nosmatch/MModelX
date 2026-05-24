@@ -40,7 +40,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
     private static final String[] WHITELIST = {
             "/api/auth/**",
             "/api/health",
-            "/api/v1/**",  // 允许API v1访问（特征工程模块）
+            "/api/v1/**",  // 允许API v1访问
             "/actuator/**",
             "/swagger-ui/**",
             "/v3/api-docs/**",
@@ -73,7 +73,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                         // 管理员接口需要ADMIN权限
                         .antMatchers("/api/admin/**").hasRole("ADMIN")
                         // 写操作需要WRITE权限
-                        .antMatchers("/api/features/**", "/api/samples/**", "/api/training/**")
+                        .antMatchers("/api/features/**", "/api/samples/**")
                             .hasAnyAuthority("PERM_WRITE", "PERM_ALL")
                         // 其他请求需要认证
                         .anyRequest().authenticated()

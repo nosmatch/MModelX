@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import featuresRoutes from './features'
 import samplesRoutes from './samples'
+import trainingRoutes from './training'
 
 const routes = [
   {
@@ -19,13 +20,9 @@ const routes = [
       ...featuresRoutes,
       // 样本工程模块
       ...samplesRoutes,
+      // 训练管理模块
+      ...trainingRoutes,
       // 其他模块（原有路由）
-      {
-        path: '/training',
-        name: 'Training',
-        component: () => import('@/views/Training/index.vue'),
-        meta: { title: '训练管理' }
-      },
       {
         path: '/serving',
         name: 'Serving',

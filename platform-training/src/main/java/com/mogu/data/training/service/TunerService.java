@@ -1,6 +1,8 @@
 package com.mogu.data.training.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mogu.data.common.exception.BusinessException;
+import com.mogu.data.training.dto.ExperimentDTO;
 import com.mogu.data.training.entity.TrainingConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,14 +13,17 @@ import java.util.Map;
 
 /**
  * 超参数调优服务
- * 使用Optuna进行超参数搜索
+ * 使用网格搜索/随机搜索进行超参数搜索
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class TunerService {
 
-    private final java.util.Map<String, Trainer> trainerMap;
+    private final LightGBMTrainer lightGBMTrainer;
+    private final XGBoostTrainer xgBoostTrainer;
+    private final MlflowRegistryService mlflowRegistryService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * 超参数调优
@@ -32,50 +37,81 @@ public class TunerService {
 
         try {
             TrainingConfig.OptunaConfig optunaConfig = config.getOptunaConfig();
+            Trainer trainer = getTrainer(config.getModel().getType());
 
-            // 这里应该调用Optuna进行超参数搜索
-            // 由于Optuna是Python库，这里需要通过ProcessBuilder调用Python脚本
-            // 或者使用Java的Optuna绑定（如果有的话）
+            // 创建实验
+            ExperimentDTO experiment = ExperimentDTO.of(
+                    config.getExperimentName(),
+                    "Hyperparameter tuning",
+                    config.getDatasetVersion(),
+                    config.getModel().getType()
+            );
+            mlflowRegistryService.createExperiment(experiment);
 
-            double bestScore = 0.0;
+            double bestScore = optunaConfig.getDirection().equals("minimize") ? Double.MAX_VALUE : 0.0;
             Map<String, Object> bestParams = new HashMap<>();
+            Map<String, Object> bestMetrics = new HashMap<>();
 
             // 模拟超参数搜索过程
             for (int i = 0; i < optunaConfig.getNTrials(); i++) {
-                // 随机生成超参数
                 Map<String, Object> trialParams = generateTrialParams(config.getModel().getType());
 
                 // 训练模型
                 TrainingConfig trialConfig = cloneConfig(config);
                 trialConfig.getModel().setParams(trialParams);
 
-                Trainer trainer = getTrainer(trialConfig.getModel().getType());
                 String modelPath = trainer.train(trialConfig);
-
-                // 评估模型
                 Map<String, Object> metrics = trainer.validate(modelPath, trialConfig);
-                double score = (double) metrics.get(optunaConfig.getMetric());
+                double score = ((Number) metrics.get(optunaConfig.getMetric())).doubleValue();
+
+                // 记录每个 trial 的参数和指标
+                mlflowRegistryService.logParams(config.getExperimentName() + "_trial_" + i, trialParams);
+                @SuppressWarnings("unchecked")
+                Map<String, Double> metricsDouble = (Map<String, Double>) (Object) metrics;
+                mlflowRegistryService.logMetrics(config.getExperimentName() + "_trial_" + i, metricsDouble);
 
                 // 更新最佳参数
-                if (score > bestScore) {
+                boolean isBetter = optunaConfig.getDirection().equals("minimize")
+                        ? score < bestScore
+                        : score > bestScore;
+
+                if (isBetter) {
                     bestScore = score;
-                    bestParams = trialParams;
+                    bestParams = new HashMap<>(trialParams);
+                    bestMetrics = new HashMap<>(metrics);
                 }
 
                 log.info("Trial {}/{}: {} = {}",
                         i + 1, optunaConfig.getNTrials(), optunaConfig.getMetric(), score);
             }
 
+            // 使用最佳参数再次训练并注册模型
+            TrainingConfig bestConfig = cloneConfig(config);
+            bestConfig.getModel().setParams(bestParams);
+            String bestModelPath = trainer.train(bestConfig);
+            Map<String, Object> finalMetrics = trainer.validate(bestModelPath, bestConfig);
+
+            mlflowRegistryService.logParams(config.getExperimentName(), bestParams);
+            @SuppressWarnings("unchecked")
+            Map<String, Double> finalMetricsDouble = (Map<String, Double>) (Object) finalMetrics;
+            mlflowRegistryService.logMetrics(config.getExperimentName(), finalMetricsDouble);
+            mlflowRegistryService.logModel(config.getExperimentName(), bestModelPath);
+            mlflowRegistryService.endExperiment(config.getExperimentName(), "COMPLETED");
+
             Map<String, Object> result = new HashMap<>();
             result.put("bestParams", bestParams);
             result.put("bestScore", bestScore);
             result.put("metric", optunaConfig.getMetric());
+            result.put("direction", optunaConfig.getDirection());
+            result.put("finalMetrics", finalMetrics);
+            result.put("modelPath", bestModelPath);
 
             log.info("超参数调优完成, 最佳参数: {}, 最佳得分: {}", bestParams, bestScore);
             return result;
 
         } catch (Exception e) {
             log.error("超参数调优失败: {}", e.getMessage(), e);
+            mlflowRegistryService.endExperiment(config.getExperimentName(), "FAILED");
             throw new BusinessException("超参数调优失败: " + e.getMessage());
         }
     }
@@ -106,7 +142,6 @@ public class TunerService {
      * 克隆配置
      */
     private TrainingConfig cloneConfig(TrainingConfig config) {
-        // 深拷贝配置对象
         TrainingConfig cloned = new TrainingConfig();
         cloned.setExperimentName(config.getExperimentName());
         cloned.setDatasetVersion(config.getDatasetVersion());
@@ -121,11 +156,13 @@ public class TunerService {
      * 获取训练器
      */
     private Trainer getTrainer(String modelType) {
-        String trainerName = modelType + "Trainer";
-        Trainer trainer = trainerMap.get(trainerName);
-        if (trainer == null) {
-            throw new BusinessException("不支持的模型类型: " + modelType);
+        switch (modelType) {
+            case "lightgbm":
+                return lightGBMTrainer;
+            case "xgboost":
+                return xgBoostTrainer;
+            default:
+                throw new BusinessException("不支持的模型类型: " + modelType);
         }
-        return trainer;
     }
 }

@@ -1,7 +1,9 @@
 package com.mogu.data.common.entity;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import org.hibernate.annotations.Type;
 
 import javax.persistence.*;
 import java.time.LocalDateTime;
@@ -44,11 +46,17 @@ public class Model {
     @Column(nullable = false, length = 20)
     private String modelType;
 
-    @Column(columnDefinition = "JSONB")
-    private String hyperparameters;
+    @Type(type = "com.mogu.data.common.util.JsonbType")
+    @Column(name = "hyperparameters", columnDefinition = "jsonb")
+    private JsonNode hyperparameters;
 
-    @Column(columnDefinition = "JSONB")
-    private String metrics;
+    @Type(type = "com.mogu.data.common.util.JsonbType")
+    @Column(name = "metrics", columnDefinition = "jsonb")
+    private JsonNode metrics;
+
+    @Column(length = 20)
+    @Enumerated(EnumType.STRING)
+    private ModelStage stage = ModelStage.STAGING;
 
     @Column(length = 255)
     private String mlflowRunId;
@@ -76,6 +84,15 @@ public class Model {
         PYTORCH,
         SKLEARN,
         ONNX
+    }
+
+    /**
+     * 模型阶段枚举
+     */
+    public enum ModelStage {
+        STAGING,      //  staging
+        PRODUCTION,   // 生产环境
+        ARCHIVED      // 已归档
     }
 
     /**

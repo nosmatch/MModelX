@@ -1,4 +1,4 @@
-package com.mogu.data.training.entity;
+package com.mogu.data.training.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -8,12 +8,12 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * 实验实体
+ * 实验 DTO（用于 API 请求/响应和内存缓存）
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class Experiment {
+public class ExperimentDTO {
 
     private Long id;
     private String name;
@@ -27,8 +27,8 @@ public class Experiment {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static Experiment of(String name, String description, String datasetVersion, String modelType) {
-        Experiment experiment = new Experiment();
+    public static ExperimentDTO of(String name, String description, String datasetVersion, String modelType) {
+        ExperimentDTO experiment = new ExperimentDTO();
         experiment.setName(name);
         experiment.setDescription(description);
         experiment.setDatasetVersion(datasetVersion);

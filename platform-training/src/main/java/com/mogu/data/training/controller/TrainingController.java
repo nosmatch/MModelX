@@ -1,8 +1,9 @@
 package com.mogu.data.training.controller;
 
+import com.mogu.data.common.entity.TrainingJob;
 import com.mogu.data.common.result.Result;
-import com.mogu.data.training.entity.Experiment;
-import com.mogu.data.training.entity.Model;
+import com.mogu.data.training.dto.ExperimentDTO;
+import com.mogu.data.training.dto.ModelDTO;
 import com.mogu.data.training.entity.TrainingConfig;
 import com.mogu.data.training.service.*;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,7 @@ import java.util.Map;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/training")
+@RequestMapping("/api/v1/training")
 @RequiredArgsConstructor
 public class TrainingController {
 
@@ -25,9 +26,10 @@ public class TrainingController {
     private final XGBoostTrainer xgBoostTrainer;
     private final TunerService tunerService;
     private final MlflowRegistryService mlflowRegistryService;
+    private final TrainingJobService trainingJobService;
 
     /**
-     * 训练模型
+     * 同步训练模型（快捷入口）
      */
     @PostMapping("/train")
     public Result<String> train(@RequestBody TrainingConfig config) {
@@ -35,7 +37,7 @@ public class TrainingController {
 
         try {
             // 创建实验
-            Experiment experiment = Experiment.of(
+            ExperimentDTO experiment = ExperimentDTO.of(
                     config.getExperimentName(),
                     "Auto generated experiment",
                     config.getDatasetVersion(),
@@ -75,6 +77,45 @@ public class TrainingController {
     }
 
     /**
+     * 提交异步训练任务
+     */
+    @PostMapping("/jobs")
+    public Result<Long> submitTrainingJob(@RequestBody TrainingConfig config) {
+        log.info("提交异步训练任务: {}", config.getExperimentName());
+        Long jobId = trainingJobService.submitTrainingJob(config);
+        // 异步执行训练
+        trainingJobService.executeTraining(jobId, config);
+        return Result.success(jobId);
+    }
+
+    /**
+     * 获取训练任务状态
+     */
+    @GetMapping("/jobs/{id}")
+    public Result<TrainingJob> getJobStatus(@PathVariable Long id) {
+        TrainingJob job = trainingJobService.getJobStatus(id);
+        return Result.success(job);
+    }
+
+    /**
+     * 列出所有训练任务
+     */
+    @GetMapping("/jobs")
+    public Result<List<TrainingJob>> listTrainingJobs() {
+        List<TrainingJob> jobs = trainingJobService.listJobs();
+        return Result.success(jobs);
+    }
+
+    /**
+     * 列出运行中的训练任务
+     */
+    @GetMapping("/jobs/running")
+    public Result<List<TrainingJob>> listRunningJobs() {
+        List<TrainingJob> jobs = trainingJobService.listRunningJobs();
+        return Result.success(jobs);
+    }
+
+    /**
      * 超参数调优
      */
     @PostMapping("/tune")
@@ -87,7 +128,7 @@ public class TrainingController {
      * 创建实验
      */
     @PostMapping("/experiments")
-    public Result<Long> createExperiment(@RequestBody Experiment experiment) {
+    public Result<Long> createExperiment(@RequestBody ExperimentDTO experiment) {
         Long id = mlflowRegistryService.createExperiment(experiment);
         return Result.success(id);
     }
@@ -96,8 +137,8 @@ public class TrainingController {
      * 获取实验
      */
     @GetMapping("/experiments/{name}")
-    public Result<Experiment> getExperiment(@PathVariable String name) {
-        Experiment experiment = mlflowRegistryService.getExperiment(name);
+    public Result<ExperimentDTO> getExperiment(@PathVariable String name) {
+        ExperimentDTO experiment = mlflowRegistryService.getExperiment(name);
         return Result.success(experiment);
     }
 
@@ -105,8 +146,8 @@ public class TrainingController {
      * 列出所有实验
      */
     @GetMapping("/experiments")
-    public Result<List<Experiment>> listExperiments() {
-        List<Experiment> experiments = mlflowRegistryService.listExperiments();
+    public Result<List<ExperimentDTO>> listExperiments() {
+        List<ExperimentDTO> experiments = mlflowRegistryService.listExperiments();
         return Result.success(experiments);
     }
 
@@ -114,7 +155,7 @@ public class TrainingController {
      * 注册模型
      */
     @PostMapping("/models")
-    public Result<Long> registerModel(@RequestBody Model model) {
+    public Result<Long> registerModel(@RequestBody ModelDTO model) {
         Long id = mlflowRegistryService.registerModel(model);
         return Result.success(id);
     }
@@ -134,8 +175,8 @@ public class TrainingController {
      * 获取生产环境模型
      */
     @GetMapping("/models/{name}/production")
-    public Result<Model> getProductionModel(@PathVariable String name) {
-        Model model = mlflowRegistryService.getProductionModel(name);
+    public Result<ModelDTO> getProductionModel(@PathVariable String name) {
+        ModelDTO model = mlflowRegistryService.getProductionModel(name);
         return Result.success(model);
     }
 
@@ -143,8 +184,8 @@ public class TrainingController {
      * 列出所有模型
      */
     @GetMapping("/models")
-    public Result<List<Model>> listModels() {
-        List<Model> models = mlflowRegistryService.listModels();
+    public Result<List<ModelDTO>> listModels() {
+        List<ModelDTO> models = mlflowRegistryService.listModels();
         return Result.success(models);
     }
 

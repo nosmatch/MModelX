@@ -103,14 +103,46 @@
           </div>
         </div>
 
-        <!-- 训练管理 -->
-        <div
-          class="nav-item"
-          :class="{ active: $route.path === '/training' }"
-          @click="navigate('/training')"
-        >
-<!--          <span class="nav-icon">🎯</span>-->
-          <span class="nav-text">训练管理</span>
+        <!-- 训练管理（可展开） -->
+        <div class="nav-group">
+          <div
+            class="nav-item group-header"
+            :class="{ active: isTrainingActive, expanded: expandedMenus.training }"
+            @click="toggleMenu('training')"
+          >
+            <span class="nav-text">训练管理</span>
+            <span class="expand-icon">{{ expandedMenus.training ? '▼' : '▶' }}</span>
+          </div>
+          <div v-show="expandedMenus.training" class="nav-submenu">
+            <div
+              class="nav-item sub-item"
+              :class="{ active: $route.path === '/training/overview' }"
+              @click="navigate('/training/overview')"
+            >
+              <span class="nav-text">训练概览</span>
+            </div>
+            <div
+              class="nav-item sub-item"
+              :class="{ active: $route.path === '/training/experiments' }"
+              @click="navigate('/training/experiments')"
+            >
+              <span class="nav-text">实验列表</span>
+            </div>
+            <div
+              class="nav-item sub-item"
+              :class="{ active: $route.path === '/training/models' }"
+              @click="navigate('/training/models')"
+            >
+              <span class="nav-text">模型列表</span>
+            </div>
+            <div
+              class="nav-item sub-item"
+              :class="{ active: $route.path === '/training/tuning' }"
+              @click="navigate('/training/tuning')"
+            >
+              <span class="nav-text">超参数调优</span>
+            </div>
+          </div>
         </div>
 
         <!-- 模型部署 -->
@@ -180,7 +212,8 @@ const route = useRoute()
 // 展开的菜单
 const expandedMenus = ref({
   features: true,  // 默认展开特征工程子菜单
-  samples: false
+  samples: false,
+  training: false
 })
 
 // 检查特征工程菜单是否激活
@@ -191,6 +224,11 @@ const isFeaturesActive = computed(() => {
 // 检查样本工程菜单是否激活
 const isSamplesActive = computed(() => {
   return route.path.startsWith('/samples')
+})
+
+// 检查训练管理菜单是否激活
+const isTrainingActive = computed(() => {
+  return route.path.startsWith('/training')
 })
 
 // 页面标题
@@ -207,6 +245,10 @@ const pageTitle = computed(() => {
     '/samples/configs': '样本配置',
     '/samples/build': '样本构建',
     '/samples/datasets': '数据集管理',
+    '/training/overview': '训练概览',
+    '/training/experiments': '实验列表',
+    '/training/models': '模型列表',
+    '/training/tuning': '超参数调优',
     '/training': '训练管理',
     '/serving': '模型部署',
     '/datasources': '数据源管理'

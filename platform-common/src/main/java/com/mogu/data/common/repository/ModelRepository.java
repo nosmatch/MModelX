@@ -61,6 +61,15 @@ public interface ModelRepository extends JpaRepository<Model, Long> {
     List<Model> findLatestByName(@Param("name") String name);
 
     /**
+     * 根据名称和阶段查找模型
+     *
+     * @param name 模型名称
+     * @param stage 阶段
+     * @return 模型
+     */
+    Optional<Model> findByNameAndStage(String name, Model.ModelStage stage);
+
+    /**
      * 查找已注册的模型
      *
      * @return 模型列表

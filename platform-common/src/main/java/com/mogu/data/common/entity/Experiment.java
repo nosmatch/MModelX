@@ -1,7 +1,9 @@
 package com.mogu.data.common.entity;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import org.hibernate.annotations.Type;
 
 import javax.persistence.*;
 import java.math.BigDecimal;
@@ -36,8 +38,9 @@ public class Experiment {
     @Column(nullable = false, length = 20)
     private String modelType;
 
-    @Column(columnDefinition = "JSONB")
-    private String hyperparameters;
+    @Type(type = "com.mogu.data.common.util.JsonbType")
+    @Column(name = "hyperparameters", columnDefinition = "jsonb")
+    private JsonNode hyperparameters;
 
     @Column(length = 50)
     private String metricName = "auc";

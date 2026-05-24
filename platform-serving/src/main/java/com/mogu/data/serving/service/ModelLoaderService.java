@@ -3,7 +3,7 @@ package com.mogu.data.serving.service;
 import com.mogu.data.common.exception.BusinessException;
 import com.mogu.data.common.storage.MinioService;
 import com.mogu.data.common.storage.RedisService;
-import com.mogu.data.training.entity.Model;
+import com.mogu.data.training.dto.ModelDTO;
 import com.mogu.data.training.service.MlflowRegistryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -78,7 +78,7 @@ public class ModelLoaderService {
 
         try {
             // 从MLflow获取生产环境模型
-            Model modelInfo = mlflowRegistryService.getProductionModel(modelName);
+            ModelDTO modelInfo = mlflowRegistryService.getProductionModel(modelName);
 
             // 加载模型
             return loadModel(modelName, modelInfo.getVersion());
