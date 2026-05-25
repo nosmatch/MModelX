@@ -1,0 +1,117 @@
+server:
+  port: 8090
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+
+spring:
+  application:
+    name: mmodelx-serving
+
+  # 数据源配置（Serving 只需读取模型元数据）
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/mmodelx
+    username: mmodelx
+    password: mmodelx123
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 10
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      connection-test-query: SELECT 1
+
+  # Redis配置（在线特征存储）
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      database: 0
+      timeout: 100
+      lettuce:
+        pool:
+          max-active: 16
+          max-wait: -1
+          max-idle: 16
+          min-idle: 4
+
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  # Flyway配置（Serving 不执行迁移）
+  flyway:
+    enabled: false
+
+# MinIO配置（模型文件存储）
+minio:
+  endpoint: http://localhost:9002
+  access-key: minioadmin
+  secret-key: minioadmin
+  bucket-name: mmodelx
+  secure: false
+
+# MLflow配置（模型注册中心）
+mlflow:
+  tracking-uri: http://localhost:5000
+  registry-uri: http://localhost:5000
+  s3-endpoint-url: http://localhost:9002
+  access-key-id: minioadmin
+  secret-access-key: minioadmin
+  bucket-name: mlflow
+
+# Actuator配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.mogu.data.serving: DEBUG
+    com.mogu.data.common.registry: INFO
+    org.springframework: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/mmodelx-serving.log
+    max-size: 100MB
+    max-history: 7
+
+# Serving 特有配置
+serving:
+  model:
+    cache:
+      max-size: 50
+      expire-after-write-minutes: 60
+    preload:
+      enabled: true
+      stages:
+        - Production
+  prediction:
+    timeout-ms: 500
+    max-batch-size: 100

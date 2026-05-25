@@ -1,0 +1,47 @@
+server:
+  port: 8091
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: mmodelx-deployment
+
+  # 数据源配置（deployment 只需读取模型和部署元数据）
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/mmodelx
+    username: mmodelx
+    password: mmodelx123
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 10
+
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+
+# K8s 配置
+k8s:
+  # kubeconfig 文件路径，留空则使用默认方式（~/.kube/config 或集群内 ServiceAccount）
+  kubeconfig-path: ${KUBECONFIG_PATH:}
+  # K8s API Server URL（可选）
+  master-url: ${K8S_MASTER_URL:}
+  # ServiceAccount token（可选）
+  token: ${K8S_TOKEN:}
+  # 是否验证 SSL（KinD 本地环境建议 false）
+  verify-ssl: false
+
+# 推理服务镜像配置
+inference:
+  image: mmodelx-inference:latest
+  port: 8080
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.mogu.data.deployment: DEBUG
+    io.kubernetes: INFO
