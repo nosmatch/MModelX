@@ -8,7 +8,6 @@
           placeholder="搜索配置名称或描述"
           clearable
           style="width: 280px; margin-right: 12px"
-          @input="handleSearch"
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
@@ -20,7 +19,6 @@
           placeholder="筛选状态"
           clearable
           style="width: 140px; margin-right: 12px"
-          @change="handleFilterChange"
         >
           <el-option label="激活" value="ACTIVE" />
           <el-option label="禁用" value="DISABLED" />
@@ -32,7 +30,6 @@
           placeholder="标签类型"
           clearable
           style="width: 140px"
-          @change="handleFilterChange"
         >
           <el-option label="二分类" value="BINARY" />
           <el-option label="多分类" value="MULTICLASS" />
@@ -49,7 +46,7 @@
     <!-- 数据表格 -->
     <el-table
       v-loading="samplesStore.loading.configs"
-      :data="displayConfigs"
+      :data="pagedConfigs"
       stripe
       style="width: 100%"
     >
@@ -133,10 +130,8 @@
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
         :page-sizes="[10, 20, 50, 100]"
-        :total="samplesStore.pagination.total"
+        :total="displayConfigs.length"
         layout="total, sizes, prev, pager, next, jumper"
-        @current-change="handlePageChange"
-        @size-change="handleSizeChange"
       />
     </div>
 
@@ -153,11 +148,19 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Plus, SetUp, Edit, VideoPlay, Delete } from '@element-plus/icons-vue'
 import { useSamplesStore } from '@/stores/samples'
+import { formatDate } from '@/utils/date'
+import {
+  ActiveStatusColors,
+  ActiveStatusLabels,
+  LabelTypeColors,
+  LabelTypeLabels,
+  SplitStrategyLabels
+} from '@/constants/status'
 import SampleConfigDialog from './SampleConfigDialog.vue'
 
 const router = useRouter()
@@ -194,25 +197,17 @@ const displayConfigs = computed(() => {
   return configs
 })
 
+const pagedConfigs = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return displayConfigs.value.slice(start, start + pageSize.value)
+})
+
 const loadConfigs = async () => {
   try {
-    await samplesStore.fetchConfigs({
-      page: currentPage.value,
-      pageSize: pageSize.value
-    })
+    await samplesStore.fetchConfigs()
   } catch (error) {
-    ElMessage.error('加载样本配置失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
-}
-
-let searchDebounceTimer = null
-const handleSearch = () => {
-  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-  searchDebounceTimer = setTimeout(() => {}, 300)
-}
-
-const handleFilterChange = () => {
-  currentPage.value = 1
 }
 
 const handleRefresh = () => {
@@ -247,21 +242,9 @@ const handleDelete = async (row) => {
     ElMessage.success('删除成功')
     await loadConfigs()
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败: ' + error.message)
-    }
+    if (error === 'cancel') return
+    // 错误已由 request.js 拦截器统一提示
   }
-}
-
-const handlePageChange = (page) => {
-  currentPage.value = page
-  loadConfigs()
-}
-
-const handleSizeChange = (size) => {
-  pageSize.value = size
-  currentPage.value = 1
-  loadConfigs()
 }
 
 const handleDialogClose = () => {
@@ -281,50 +264,26 @@ const handleDialogSave = async (data) => {
     showDialog.value = false
     await loadConfigs()
   } catch (error) {
-    ElMessage.error('保存失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
-const getStatusType = (status) => {
-  const types = { ACTIVE: 'success', DISABLED: 'warning', ARCHIVED: 'info' }
-  return types[status] || 'info'
-}
-
-const getStatusLabel = (status) => {
-  const labels = { ACTIVE: '激活', DISABLED: '禁用', ARCHIVED: '归档' }
-  return labels[status] || status
-}
-
-const getLabelTypeType = (type) => {
-  const types = { BINARY: 'danger', MULTICLASS: 'warning', REGRESSION: 'success' }
-  return types[type] || 'info'
-}
-
-const getLabelTypeLabel = (type) => {
-  const labels = { BINARY: '二分类', MULTICLASS: '多分类', REGRESSION: '回归' }
-  return labels[type] || type
-}
-
-const getSplitStrategyLabel = (strategy) => {
-  const labels = { RANDOM: '随机', TEMPORAL: '时序', STRATIFIED: '分层' }
-  return labels[strategy] || strategy
-}
+// 状态/标签类型/划分策略映射（统一从 constants/status.js 取）
+const getStatusType = (status) => ActiveStatusColors[status] || 'info'
+const getStatusLabel = (status) => ActiveStatusLabels[status] || status
+const getLabelTypeType = (type) => LabelTypeColors[type] || 'info'
+const getLabelTypeLabel = (type) => LabelTypeLabels[type] || type
+const getSplitStrategyLabel = (strategy) => SplitStrategyLabels[strategy] || strategy
 
 const formatRatio = (ratio) => {
   if (ratio === undefined || ratio === null) return '0'
   return Math.round(ratio * 100) + '%'
 }
 
-const formatDate = (dateString) => {
-  if (!dateString) return '-'
-  const date = new Date(dateString)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}`
-}
+// 监听搜索/筛选条件变化，自动回到第 1 页
+watch([searchKeyword, filterStatus, filterLabelType], () => {
+  currentPage.value = 1
+})
 
 onMounted(() => {
   loadConfigs()

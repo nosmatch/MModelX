@@ -129,6 +129,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, VideoPlay, CircleCheck } from '@element-plus/icons-vue'
 import { useSamplesStore } from '@/stores/samples'
+import { LabelTypeLabels, SplitStrategyLabels } from '@/constants/status'
 
 const router = useRouter()
 const route = useRoute()
@@ -187,7 +188,7 @@ const startBuild = async () => {
       success: false,
       message: error.message || '构建失败'
     }
-    ElMessage.error('构建失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -268,15 +269,9 @@ const goToDatasets = () => {
   router.push({ name: 'DatasetList' })
 }
 
-const getLabelTypeLabel = (type) => {
-  const labels = { BINARY: '二分类', MULTICLASS: '多分类', REGRESSION: '回归' }
-  return labels[type] || type
-}
-
-const getSplitStrategyLabel = (strategy) => {
-  const labels = { RANDOM: '随机', TEMPORAL: '时序', STRATIFIED: '分层' }
-  return labels[strategy] || strategy
-}
+// 标签类型/划分策略映射（统一从 constants/status.js 取）
+const getLabelTypeLabel = (type) => LabelTypeLabels[type] || type
+const getSplitStrategyLabel = (strategy) => SplitStrategyLabels[strategy] || strategy
 
 const formatRatio = (ratio) => {
   if (ratio === undefined || ratio === null) return '0%'

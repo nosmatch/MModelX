@@ -676,7 +676,7 @@ const handleImport = () => {
 
     ElMessage.success(`成功导入 ${addedCount} 个特征`)
   } catch (error) {
-    ElMessage.error('导入失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -805,7 +805,7 @@ const handleSave = async () => {
     features.value = []
     selectedViewName.value = ''
   } catch (error) {
-    ElMessage.error('保存失败: ' + (error.message || '未知错误'))
+    // 错误已由 request.js 拦截器统一提示
   } finally {
     saving.value = false
   }

@@ -16,56 +16,16 @@
     <!-- Namespace 选择器 + 统计卡片 -->
     <el-row :gutter="16" class="stats-row">
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #ecf5ff; color: #409eff;">
-              <el-icon :size="24"><Box /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ deployments.length }}</div>
-              <div class="stat-label">总部署数</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="Box" tone="primary" :value="deployments.length" label="总部署数" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #f0f9ff; color: #67c23a;">
-              <el-icon :size="24"><CircleCheck /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ runningCount }}</div>
-              <div class="stat-label">运行中</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="CircleCheck" tone="success" :value="runningCount" label="运行中" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #fdf6ec; color: #e6a23c;">
-              <el-icon :size="24"><Loading /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ deployingCount }}</div>
-              <div class="stat-label">部署中</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="Loading" tone="warning" :value="deployingCount" label="部署中" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #fef0f0; color: #f56c6c;">
-              <el-icon :size="24"><Warning /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ failedCount }}</div>
-              <div class="stat-label">失败/停止</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="Warning" tone="danger" :value="failedCount" label="失败/停止" />
       </el-col>
     </el-row>
 
@@ -277,6 +237,13 @@ import {
 import { useDeploymentStore } from '@/stores/deployment'
 import { useTrainingStore } from '@/stores/training'
 import InstanceList from './InstanceList.vue'
+import { formatDate } from '@/utils/date'
+import StatCard from '@/components/StatCard.vue'
+import {
+  DeploymentStatusColors,
+  DeploymentStatusLabels,
+  K8sStatusColors
+} from '@/constants/status'
 
 const deploymentStore = useDeploymentStore()
 const trainingStore = useTrainingStore()
@@ -348,7 +315,7 @@ const refreshData = async () => {
     ])
     ElMessage.success('刷新成功')
   } catch (error) {
-    ElMessage.error('刷新失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -382,7 +349,7 @@ const confirmDeploy = async () => {
     showDeployDialog.value = false
     resetDeployForm()
   } catch (error) {
-    ElMessage.error('部署失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -396,9 +363,8 @@ const handleUndeploy = async (row) => {
     await deploymentStore.undeploy(row.id)
     ElMessage.success('下线成功')
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('下线失败: ' + error.message)
-    }
+    if (error === 'cancel') return
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -417,7 +383,7 @@ const confirmScale = async () => {
     ElMessage.success('扩缩容成功')
     showScaleDialog.value = false
   } catch (error) {
-    ElMessage.error('扩缩容失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -453,37 +419,10 @@ const resetDeployForm = () => {
   }
 }
 
-// 状态映射
-const getStatusType = (status) => {
-  const types = {
-    RUNNING: 'success',
-    DEPLOYING: 'warning',
-    STOPPED: 'info',
-    FAILED: 'danger'
-  }
-  return types[status] || 'info'
-}
-
-const getStatusLabel = (status) => {
-  const labels = {
-    RUNNING: '运行中',
-    DEPLOYING: '部署中',
-    STOPPED: '已停止',
-    FAILED: '失败'
-  }
-  return labels[status] || status
-}
-
-const getK8sStatusType = (status) => {
-  const types = {
-    Running: 'success',
-    Scaling: 'warning',
-    Deploying: 'primary',
-    Stopped: 'info',
-    NotFound: 'danger'
-  }
-  return types[status] || 'info'
-}
+// 状态映射（统一从 constants/status.js 取）
+const getStatusType = (status) => DeploymentStatusColors[status] || 'info'
+const getStatusLabel = (status) => DeploymentStatusLabels[status] || status
+const getK8sStatusType = (status) => K8sStatusColors[status] || 'info'
 
 const getReplicaType = (row) => {
   const ready = row.readyReplicas || 0
@@ -491,12 +430,6 @@ const getReplicaType = (row) => {
   if (ready >= total) return 'success'
   if (ready > 0) return 'warning'
   return 'danger'
-}
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '-'
-  const date = new Date(dateStr)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
 onMounted(() => {
@@ -531,38 +464,6 @@ onMounted(() => {
 
 .stats-row {
   margin-bottom: 24px;
-}
-
-.stat-card {
-  .stat-content {
-    display: flex;
-    align-items: center;
-  }
-
-  .stat-icon {
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    margin-right: 16px;
-  }
-
-  .stat-info {
-    .stat-value {
-      font-size: 24px;
-      font-weight: 600;
-      color: $text-primary;
-      line-height: 1.2;
-    }
-
-    .stat-label {
-      font-size: 13px;
-      color: $text-muted;
-      margin-top: 4px;
-    }
-  }
 }
 
 .toolbar {

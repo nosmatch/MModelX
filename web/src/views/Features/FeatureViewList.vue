@@ -9,7 +9,6 @@
           placeholder="搜索特征视图名称或描述"
           clearable
           style="width: 300px; margin-right: 12px"
-          @input="handleSearch"
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
@@ -80,7 +79,7 @@
     <!-- 数据表格 -->
     <el-table
       v-loading="featuresStore.loading.views"
-      :data="displayViews"
+      :data="pagedViews"
       stripe
       style="width: 100%"
       @row-click="handleRowClick"
@@ -243,10 +242,8 @@
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
         :page-sizes="[10, 20, 50, 100]"
-        :total="featuresStore.pagination.total"
+        :total="displayViews.length"
         layout="total, sizes, prev, pager, next, jumper"
-        @current-change="handlePageChange"
-        @size-change="handleSizeChange"
       />
     </div>
 
@@ -289,6 +286,7 @@ import {
   Delete
 } from '@element-plus/icons-vue'
 import { useFeaturesStore } from '@/stores/features'
+import { formatDate } from '@/utils/date'
 import {
   FeatureViewStatusOptions,
   FeatureViewStatusLabels,
@@ -349,6 +347,14 @@ const displayViews = computed(() => {
 })
 
 /**
+ * 当前页显示的特征视图（前端本地分页切片）
+ */
+const pagedViews = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return displayViews.value.slice(start, start + pageSize.value)
+})
+
+/**
  * 获取所有实体类型（去重）
  */
 const entityTypes = computed(() => {
@@ -357,40 +363,21 @@ const entityTypes = computed(() => {
 
 // ==================== 方法 ====================
 /**
- * 加载特征视图列表
+ * 加载特征视图列表（一次拉全量，前端本地过滤+分页）
  */
 const loadViews = async () => {
   try {
-    await featuresStore.fetchViews({
-      page: currentPage.value,
-      pageSize: pageSize.value,
-      status: filterStatus.value,
-      entity: filterEntity.value
-    })
+    await featuresStore.fetchViews()
   } catch (error) {
-    ElMessage.error('加载特征视图列表失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
 /**
- * 处理搜索输入（带防抖）
- */
-let searchDebounceTimer = null
-const handleSearch = () => {
-  if (searchDebounceTimer) {
-    clearTimeout(searchDebounceTimer)
-  }
-  searchDebounceTimer = setTimeout(() => {
-    // 搜索在本地进行，不需要重新请求后端
-  }, 300)
-}
-
-/**
- * 处理筛选条件变化
+ * 处理筛选条件变化（前端本地过滤，仅重置页码）
  */
 const handleFilterChange = () => {
   currentPage.value = 1
-  loadViews()
 }
 
 /**
@@ -459,9 +446,8 @@ const handleDelete = async (row) => {
     // 重新加载列表
     await loadViews()
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败: ' + error.message)
-    }
+    // 用户取消时 error === 'cancel'，其它错误已由 request.js 拦截器统一提示
+    if (error === 'cancel') return
   }
 }
 
@@ -470,23 +456,6 @@ const handleDelete = async (row) => {
  */
 const handleRowClick = (row) => {
   handleView(row)
-}
-
-/**
- * 处理分页变化
- */
-const handlePageChange = (page) => {
-  currentPage.value = page
-  loadViews()
-}
-
-/**
- * 处理每页条数变化
- */
-const handleSizeChange = (size) => {
-  pageSize.value = size
-  currentPage.value = 1
-  loadViews()
 }
 
 /**
@@ -513,7 +482,7 @@ const handleDialogSave = async (data) => {
     showDialog.value = false
     await loadViews()
   } catch (error) {
-    ElMessage.error('保存失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -532,29 +501,13 @@ const getTableName = (row) => {
   }
 }
 
-/**
- * 格式化日期
- */
-const formatDate = (dateString) => {
-  if (!dateString) return '-'
-
-  const date = new Date(dateString)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-
-  return `${year}-${month}-${day} ${hours}:${minutes}`
-}
-
 // ==================== 生命周期 ====================
 onMounted(() => {
   loadViews()
 })
 
-// 监听筛选条件变化
-watch([filterStatus, filterEntity], () => {
+// 监听搜索/筛选条件变化，自动回到第 1 页
+watch([searchKeyword, filterStatus, filterEntity], () => {
   currentPage.value = 1
 })
 </script>

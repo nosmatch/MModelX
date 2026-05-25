@@ -243,11 +243,11 @@ const loadDatasets = async () => {
       datasetList.value = response.data || []
       console.log('[TrainingConfigDialog] 数据集加载成功:', datasetList.value.length, '条')
     } else {
-      ElMessage.error(response.message || '加载数据集列表失败')
+      // 非成功状态码已由 request.js 拦截器统一提示
     }
   } catch (error) {
     console.error('加载数据集列表失败:', error)
-    ElMessage.error('加载数据集列表失败: ' + (error.message || '网络错误'))
+    // 错误已由 request.js 拦截器统一提示
   } finally {
     loadingDatasets.value = false
   }

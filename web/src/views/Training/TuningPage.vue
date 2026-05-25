@@ -371,7 +371,7 @@ const handleStartTuning = async () => {
     tuneResult.value = result
     ElMessage.success('超参数调优完成！')
   } catch (error) {
-    ElMessage.error('调优失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -416,7 +416,7 @@ const handleRegisterModel = async () => {
     await trainingStore.fetchModels()
     ElMessage.success('模型已注册')
   } catch (error) {
-    ElMessage.error('注册失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 </script>

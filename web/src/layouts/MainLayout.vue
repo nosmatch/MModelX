@@ -31,6 +31,13 @@
           <div v-show="expandedMenus.features" class="nav-submenu">
             <div
               class="nav-item sub-item"
+              :class="{ active: $route.path === '/features/overview' }"
+              @click="navigate('/features/overview')"
+            >
+              <span class="nav-text">特征概览</span>
+            </div>
+            <div
+              class="nav-item sub-item"
               :class="{ active: $route.path === '/features/views' }"
               @click="navigate('/features/views')"
             >
@@ -214,7 +221,11 @@
 
       <!-- 内容区 -->
       <main class="main-content">
-        <router-view />
+        <router-view v-slot="{ Component, route: currentRoute }">
+          <keep-alive :include="cachedViews">
+            <component :is="Component" :key="currentRoute.fullPath" />
+          </keep-alive>
+        </router-view>
       </main>
     </div>
   </div>
@@ -226,6 +237,23 @@ import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
 const route = useRoute()
+
+// 收集 router 中标记了 meta.keepAlive 的路由 name，作为 keep-alive 缓存白名单
+const cachedViews = computed(() => {
+  const names = []
+  const collect = (routes) => {
+    routes.forEach((r) => {
+      if (r.meta?.keepAlive && r.name) {
+        names.push(r.name)
+      }
+      if (r.children?.length) {
+        collect(r.children)
+      }
+    })
+  }
+  collect(router.options.routes)
+  return names
+})
 
 // 展开的菜单
 const expandedMenus = ref({
@@ -259,6 +287,7 @@ const isServingActive = computed(() => {
 const pageTitle = computed(() => {
   const titles = {
     '/overview': '概览监控大盘',
+    '/features/overview': '特征工程概览',
     '/features/views': '特征视图',
     '/features/compute': '特征计算',
     '/features/materialize': '特征物化',

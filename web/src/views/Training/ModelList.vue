@@ -181,6 +181,8 @@ import {
   Search, Refresh, View, Box, Promotion, FolderRemove
 } from '@element-plus/icons-vue'
 import { useTrainingStore } from '@/stores/training'
+import { formatDate } from '@/utils/date'
+import { ModelStageColors, ModelStageLabels } from '@/constants/status'
 
 const trainingStore = useTrainingStore()
 
@@ -215,7 +217,7 @@ const loadModels = async () => {
   try {
     await trainingStore.fetchModels()
   } catch (error) {
-    ElMessage.error('加载模型列表失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -240,9 +242,8 @@ const handlePromote = async (row) => {
     ElMessage.success('模型已提升到生产环境')
     await loadModels()
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('操作失败: ' + error.message)
-    }
+    if (error === 'cancel') return
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -257,9 +258,8 @@ const handleArchive = async (row) => {
     ElMessage.success('模型已归档')
     await loadModels()
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('操作失败: ' + error.message)
-    }
+    if (error === 'cancel') return
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -270,26 +270,9 @@ const copyPath = () => {
   }
 }
 
-const getStageType = (stage) => {
-  const types = { Staging: 'info', Production: 'success', Archived: 'warning' }
-  return types[stage] || 'info'
-}
-
-const getStageLabel = (stage) => {
-  const labels = { Staging: '暂存', Production: '生产', Archived: '归档' }
-  return labels[stage] || stage
-}
-
-const formatDate = (dateString) => {
-  if (!dateString) return '-'
-  const date = new Date(dateString)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}`
-}
+// 阶段映射（统一从 constants/status.js 取）
+const getStageType = (stage) => ModelStageColors[stage] || 'info'
+const getStageLabel = (stage) => ModelStageLabels[stage] || stage
 
 onMounted(() => {
   loadModels()

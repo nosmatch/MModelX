@@ -472,7 +472,7 @@ const loadFeatureData = async () => {
 
     ElMessage.success('数据已更新')
   } catch (error) {
-    ElMessage.error('加载数据失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 

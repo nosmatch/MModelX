@@ -8,7 +8,6 @@
           placeholder="搜索数据集名称"
           clearable
           style="width: 280px"
-          @input="handleSearch"
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
@@ -24,7 +23,7 @@
     <!-- 数据集表格 -->
     <el-table
       v-loading="samplesStore.loading.datasets"
-      :data="displayDatasets"
+      :data="pagedDatasets"
       stripe
       style="width: 100%"
       @expand-change="handleExpandChange"
@@ -118,10 +117,8 @@
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
         :page-sizes="[10, 20, 50, 100]"
-        :total="totalDatasets"
+        :total="displayDatasets.length"
         layout="total, sizes, prev, pager, next, jumper"
-        @current-change="handlePageChange"
-        @size-change="handleSizeChange"
       />
     </div>
   </div>
@@ -134,11 +131,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, FolderOpened } from '@element-plus/icons-vue'
 import { useSamplesStore } from '@/stores/samples'
 import DatasetPreviewDialog from './DatasetPreviewDialog.vue'
+import { formatDate } from '@/utils/date'
+import { LabelTypeColors, LabelTypeLabels } from '@/constants/status'
 
 const samplesStore = useSamplesStore()
 
@@ -170,23 +169,17 @@ const displayDatasets = computed(() => {
   return datasets
 })
 
-const totalDatasets = computed(() => samplesStore.datasets.length)
+const pagedDatasets = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return displayDatasets.value.slice(start, start + pageSize.value)
+})
 
 const loadDatasets = async () => {
   try {
-    await samplesStore.fetchDatasets({
-      page: currentPage.value,
-      pageSize: pageSize.value
-    })
+    await samplesStore.fetchDatasets()
   } catch (error) {
-    ElMessage.error('加载数据集失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
-}
-
-let searchDebounceTimer = null
-const handleSearch = () => {
-  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-  searchDebounceTimer = setTimeout(() => {}, 300)
 }
 
 const handleRefresh = () => {
@@ -209,9 +202,8 @@ const handleDelete = async (row) => {
     ElMessage.success('删除成功')
     await loadDatasets()
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败: ' + error.message)
-    }
+    if (error === 'cancel') return
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -220,41 +212,13 @@ const downloadDataset = (name, version) => {
   // TODO: 实现下载
 }
 
-const handlePageChange = (page) => {
-  currentPage.value = page
-  loadDatasets()
-}
-
-const handleSizeChange = (size) => {
-  pageSize.value = size
-  currentPage.value = 1
-  loadDatasets()
-}
-
-const getLabelTypeType = (type) => {
-  const types = { BINARY: 'danger', MULTICLASS: 'warning', REGRESSION: 'success' }
-  return types[type] || 'info'
-}
-
-const getLabelTypeLabel = (type) => {
-  const labels = { BINARY: '二分类', MULTICLASS: '多分类', REGRESSION: '回归' }
-  return labels[type] || type
-}
+// 标签类型映射（统一从 constants/status.js 取）
+const getLabelTypeType = (type) => LabelTypeColors[type] || 'info'
+const getLabelTypeLabel = (type) => LabelTypeLabels[type] || type
 
 const formatNumber = (num) => {
   if (num === undefined || num === null) return '-'
   return num.toLocaleString()
-}
-
-const formatDate = (dateString) => {
-  if (!dateString) return '-'
-  const date = new Date(dateString)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}`
 }
 
 const formatSplitInfo = (splitInfo) => {
@@ -272,6 +236,11 @@ const formatSplitInfo = (splitInfo) => {
   if (splitInfo.test) parts.push(`测试: ${splitInfo.test}`)
   return parts.join(' / ')
 }
+
+// 监听搜索条件变化，自动回到第 1 页
+watch(searchKeyword, () => {
+  currentPage.value = 1
+})
 
 onMounted(() => {
   loadDatasets()

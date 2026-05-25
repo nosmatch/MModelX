@@ -3,56 +3,16 @@
     <!-- 统计卡片 -->
     <el-row :gutter="16" class="stats-row">
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #ecf5ff; color: #409eff;">
-              <el-icon :size="24"><List /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ jobStats.total }}</div>
-              <div class="stat-label">总任务</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="List" tone="primary" :value="jobStats.total" label="总任务" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #f0f9ff; color: #67c23a;">
-              <el-icon :size="24"><VideoPlay /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ jobStats.running + jobStats.pending }}</div>
-              <div class="stat-label">运行中</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="VideoPlay" tone="success" :value="jobStats.running + jobStats.pending" label="运行中" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #f0f9ff; color: #67c23a;">
-              <el-icon :size="24"><CircleCheck /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ jobStats.success }}</div>
-              <div class="stat-label">成功</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="CircleCheck" tone="success" :value="jobStats.success" label="成功" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #fef0f0; color: #f56c6c;">
-              <el-icon :size="24"><CircleClose /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ jobStats.failed }}</div>
-              <div class="stat-label">失败</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="CircleClose" tone="danger" :value="jobStats.failed" label="失败" />
       </el-col>
     </el-row>
 
@@ -265,6 +225,9 @@ import {
   Search, Refresh, Plus, View, Cpu, Loading
 } from '@element-plus/icons-vue'
 import { useTrainingStore } from '@/stores/training'
+import { formatDate, formatElapsed as formatElapsedTime } from '@/utils/date'
+import { JobStatusColors, JobStatusLabels } from '@/constants/status'
+import StatCard from '@/components/StatCard.vue'
 import TrainingConfigDialog from './TrainingConfigDialog.vue'
 
 const router = useRouter()
@@ -314,7 +277,7 @@ const loadJobs = async () => {
   try {
     await trainingStore.fetchJobs()
   } catch (error) {
-    ElMessage.error('加载训练任务失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -347,7 +310,7 @@ const handleRefreshJob = async (row) => {
     await trainingStore.fetchJobStatus(row.id)
     ElMessage.success('状态已更新')
   } catch (error) {
-    ElMessage.error('更新失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -376,52 +339,13 @@ const handleTrainingSubmit = async (config, isAsync) => {
     showConfigDialog.value = false
     await loadJobs()
   } catch (error) {
-    ElMessage.error('训练失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
-// 状态映射
-const getStatusType = (status) => {
-  const types = {
-    PENDING: 'info',
-    RUNNING: 'primary',
-    SUCCESS: 'success',
-    FAILED: 'danger',
-    CANCELLED: 'warning'
-  }
-  return types[status] || 'info'
-}
-
-const getStatusLabel = (status) => {
-  const labels = {
-    PENDING: '等待中',
-    RUNNING: '运行中',
-    SUCCESS: '成功',
-    FAILED: '失败',
-    CANCELLED: '已取消'
-  }
-  return labels[status] || status
-}
-
-const formatDate = (dateString) => {
-  if (!dateString) return '-'
-  const date = new Date(dateString)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}`
-}
-
-const formatElapsedTime = (ms) => {
-  if (!ms) return '-'
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
-  const minutes = Math.floor(ms / 60000)
-  const seconds = Math.floor((ms % 60000) / 1000)
-  return `${minutes}m ${seconds}s`
-}
+// 状态映射（统一从 constants/status.js 取）
+const getStatusType = (status) => JobStatusColors[status] || 'info'
+const getStatusLabel = (status) => JobStatusLabels[status] || status
 
 // 生命周期
 onMounted(() => {
@@ -450,38 +374,6 @@ onUnmounted(() => {
 
 .stats-row {
   margin-bottom: 24px;
-}
-
-.stat-card {
-  .stat-content {
-    display: flex;
-    align-items: center;
-  }
-
-  .stat-icon {
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    margin-right: 16px;
-  }
-
-  .stat-info {
-    .stat-value {
-      font-size: 24px;
-      font-weight: 600;
-      color: $text-primary;
-      line-height: 1.2;
-    }
-
-    .stat-label {
-      font-size: 13px;
-      color: $text-muted;
-      margin-top: 4px;
-    }
-  }
 }
 
 .quick-actions {

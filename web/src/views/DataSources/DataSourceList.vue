@@ -71,6 +71,7 @@ import {
   deleteDataSource, testConnection, enableDataSource, disableDataSource
 } from '@/api/modules/datasources'
 import DataSourceDialog from './DataSourceDialog.vue'
+import { formatDate } from '@/utils/date'
 
 const TYPE_LABELS = {
   postgresql: 'PostgreSQL', mysql: 'MySQL', redis: 'Redis',
@@ -94,7 +95,6 @@ const connInfo = (row) => {
   const parts = [row.host, row.port ? `:${row.port}` : '', row.databaseName ? `/${row.databaseName}` : '']
   return parts.join('') || '-'
 }
-const formatDate = (d) => d ? new Date(d).toLocaleString('zh-CN', { hour12: false }).slice(0, 16) : ''
 
 async function load() {
   loading.value = true

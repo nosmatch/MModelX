@@ -236,7 +236,7 @@ const handleSubmit = async () => {
     emit('success')
     handleClose()
   } catch (error) {
-    ElMessage.error((isEdit.value ? '更新' : '添加') + '失败: ' + (error.message || '未知错误'))
+    // 错误已由 request.js 拦截器统一提示
   } finally {
     submitting.value = false
   }

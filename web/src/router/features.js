@@ -9,11 +9,22 @@ export default [
   {
     path: '/features',
     name: 'Features',
-    redirect: '/features/views',
+    redirect: '/features/overview',
     meta: {
       title: '特征工程',
       icon: 'TrendCharts',
       order: 1
+    }
+  },
+  {
+    path: '/features/overview',
+    name: 'FeatureOverview',
+    component: () => import('@/views/Features/index.vue'),
+    meta: {
+      title: '特征概览',
+      icon: 'HomeFilled',
+      parent: 'Features',
+      keepAlive: true
     }
   },
   {

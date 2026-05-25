@@ -446,6 +446,7 @@ import {
   Timer
 } from '@element-plus/icons-vue'
 import { useFeaturesStore } from '@/stores/features'
+import { formatDateTime } from '@/utils/date'
 
 // ==================== localStorage 工具 ====================
 const loadFromStorage = (key, defaultValue) => {
@@ -652,7 +653,7 @@ const handleQuery = async () => {
 
     ElMessage.success(`查询成功，获取到 ${Object.keys(features).length} 个特征`)
   } catch (error) {
-    ElMessage.error('查询失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
     queryResult.value = null
   } finally {
     querying.value = false
@@ -864,21 +865,6 @@ const formatNumber = (value) => {
     return value.toLocaleString()
   }
   return value.toFixed(2)
-}
-
-/**
- * 格式化日期时间
- */
-const formatDateTime = (timestamp) => {
-  if (!timestamp) return '-'
-  const date = new Date(timestamp)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  const seconds = String(date.getSeconds()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
 // ==================== 生命周期 ====================

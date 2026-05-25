@@ -3,56 +3,16 @@
     <!-- 统计卡片 -->
     <el-row :gutter="16" class="stats-row">
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #ecf5ff; color: #409eff;">
-              <el-icon :size="24"><SetUp /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ samplesStore.configCount }}</div>
-              <div class="stat-label">样本配置</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="SetUp" tone="primary" :value="samplesStore.configCount" label="样本配置" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #f0f9ff; color: #67c23a;">
-              <el-icon :size="24"><CircleCheck /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ activeConfigCount }}</div>
-              <div class="stat-label">已激活</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="CircleCheck" tone="success" :value="activeConfigCount" label="已激活" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #fdf6ec; color: #e6a23c;">
-              <el-icon :size="24"><FolderOpened /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ samplesStore.datasetCount }}</div>
-              <div class="stat-label">数据集</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="FolderOpened" tone="warning" :value="samplesStore.datasetCount" label="数据集" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #f0f9ff; color: #409eff;">
-              <el-icon :size="24"><VideoPlay /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ recentBuildCount }}</div>
-              <div class="stat-label">最近构建</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="VideoPlay" icon-bg="#f0f9ff" icon-color="#409eff" :value="recentBuildCount" label="最近构建" />
       </el-col>
     </el-row>
 
@@ -64,7 +24,6 @@
           placeholder="搜索配置名称或描述"
           clearable
           style="width: 260px; margin-right: 12px"
-          @input="handleSearch"
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
@@ -76,7 +35,6 @@
           placeholder="筛选状态"
           clearable
           style="width: 120px; margin-right: 12px"
-          @change="handleFilterChange"
         >
           <el-option label="激活" value="ACTIVE" />
           <el-option label="禁用" value="DISABLED" />
@@ -88,7 +46,6 @@
           placeholder="标签类型"
           clearable
           style="width: 120px"
-          @change="handleFilterChange"
         >
           <el-option label="二分类" value="BINARY" />
           <el-option label="多分类" value="MULTICLASS" />
@@ -105,7 +62,7 @@
     <!-- 数据表格 -->
     <el-table
       v-loading="samplesStore.loading.configs"
-      :data="displayConfigs"
+      :data="pagedConfigs"
       stripe
       style="width: 100%"
     >
@@ -189,10 +146,8 @@
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
         :page-sizes="[10, 20, 50, 100]"
-        :total="samplesStore.pagination.total"
+        :total="displayConfigs.length"
         layout="total, sizes, prev, pager, next, jumper"
-        @current-change="handlePageChange"
-        @size-change="handleSizeChange"
       />
     </div>
 
@@ -209,7 +164,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -217,6 +172,15 @@ import {
   Search, Refresh, Plus, Edit, Delete
 } from '@element-plus/icons-vue'
 import { useSamplesStore } from '@/stores/samples'
+import { formatDate } from '@/utils/date'
+import {
+  ActiveStatusColors,
+  ActiveStatusLabels,
+  LabelTypeColors,
+  LabelTypeLabels,
+  SplitStrategyLabels
+} from '@/constants/status'
+import StatCard from '@/components/StatCard.vue'
 import SampleConfigDialog from './SampleConfigDialog.vue'
 
 const router = useRouter()
@@ -256,25 +220,17 @@ const displayConfigs = computed(() => {
   return configs
 })
 
+const pagedConfigs = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return displayConfigs.value.slice(start, start + pageSize.value)
+})
+
 const loadConfigs = async () => {
   try {
-    await samplesStore.fetchConfigs({
-      page: currentPage.value,
-      pageSize: pageSize.value
-    })
+    await samplesStore.fetchConfigs()
   } catch (error) {
-    ElMessage.error('加载样本配置失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
-}
-
-let searchDebounceTimer = null
-const handleSearch = () => {
-  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-  searchDebounceTimer = setTimeout(() => {}, 300)
-}
-
-const handleFilterChange = () => {
-  currentPage.value = 1
 }
 
 const handleRefresh = () => {
@@ -309,21 +265,9 @@ const handleDelete = async (row) => {
     ElMessage.success('删除成功')
     await loadConfigs()
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败: ' + error.message)
-    }
+    if (error === 'cancel') return
+    // 错误已由 request.js 拦截器统一提示
   }
-}
-
-const handlePageChange = (page) => {
-  currentPage.value = page
-  loadConfigs()
-}
-
-const handleSizeChange = (size) => {
-  pageSize.value = size
-  currentPage.value = 1
-  loadConfigs()
 }
 
 const handleDialogClose = () => {
@@ -343,50 +287,26 @@ const handleDialogSave = async (data) => {
     showDialog.value = false
     await loadConfigs()
   } catch (error) {
-    ElMessage.error('保存失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
-const getStatusType = (status) => {
-  const types = { ACTIVE: 'success', DISABLED: 'warning', ARCHIVED: 'info' }
-  return types[status] || 'info'
-}
-
-const getStatusLabel = (status) => {
-  const labels = { ACTIVE: '激活', DISABLED: '禁用', ARCHIVED: '归档' }
-  return labels[status] || status
-}
-
-const getLabelTypeType = (type) => {
-  const types = { BINARY: 'danger', MULTICLASS: 'warning', REGRESSION: 'success' }
-  return types[type] || 'info'
-}
-
-const getLabelTypeLabel = (type) => {
-  const labels = { BINARY: '二分类', MULTICLASS: '多分类', REGRESSION: '回归' }
-  return labels[type] || type
-}
-
-const getSplitStrategyLabel = (strategy) => {
-  const labels = { RANDOM: '随机', TEMPORAL: '时序', STRATIFIED: '分层' }
-  return labels[strategy] || strategy
-}
+// 状态/标签类型/划分策略映射（统一从 constants/status.js 取）
+const getStatusType = (status) => ActiveStatusColors[status] || 'info'
+const getStatusLabel = (status) => ActiveStatusLabels[status] || status
+const getLabelTypeType = (type) => LabelTypeColors[type] || 'info'
+const getLabelTypeLabel = (type) => LabelTypeLabels[type] || type
+const getSplitStrategyLabel = (strategy) => SplitStrategyLabels[strategy] || strategy
 
 const formatRatio = (ratio) => {
   if (ratio === undefined || ratio === null) return '0'
   return Math.round(ratio * 100) + '%'
 }
 
-const formatDate = (dateString) => {
-  if (!dateString) return '-'
-  const date = new Date(dateString)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}`
-}
+// 监听搜索/筛选条件变化，自动回到第 1 页
+watch([searchKeyword, filterStatus, filterLabelType], () => {
+  currentPage.value = 1
+})
 
 onMounted(() => {
   loadConfigs()
@@ -400,38 +320,6 @@ onMounted(() => {
 
 .stats-row {
   margin-bottom: 24px;
-}
-
-.stat-card {
-  .stat-content {
-    display: flex;
-    align-items: center;
-  }
-
-  .stat-icon {
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    margin-right: 16px;
-  }
-
-  .stat-info {
-    .stat-value {
-      font-size: 24px;
-      font-weight: 600;
-      color: $text-primary;
-      line-height: 1.2;
-    }
-
-    .stat-label {
-      font-size: 13px;
-      color: $text-muted;
-      margin-top: 4px;
-    }
-  }
 }
 
 .toolbar {

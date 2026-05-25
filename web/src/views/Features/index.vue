@@ -9,56 +9,16 @@
     <!-- 统计卡片 -->
     <el-row :gutter="16" class="stats-row">
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #ecf5ff; color: #409eff;">
-              <el-icon :size="24"><Document /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ featuresStore.views.length }}</div>
-              <div class="stat-label">特征视图</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="Document" tone="primary" :value="featuresStore.views.length" label="特征视图" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #f0f9ff; color: #67c23a;">
-              <el-icon :size="24"><CircleCheck /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ activeViewCount }}</div>
-              <div class="stat-label">已激活</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="CircleCheck" tone="success" :value="activeViewCount" label="已激活" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #fdf6ec; color: #e6a23c;">
-              <el-icon :size="24"><Cpu /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ totalFeatureCount }}</div>
-              <div class="stat-label">特征总数</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="Cpu" tone="warning" :value="totalFeatureCount" label="特征总数" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #f0f9ff; color: #409eff;">
-              <el-icon :size="24"><TrendCharts /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ featuresStore.entityTypes.length }}</div>
-              <div class="stat-label">实体类型</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="TrendCharts" icon-bg="#f0f9ff" icon-color="#409eff" :value="featuresStore.entityTypes.length" label="实体类型" />
       </el-col>
     </el-row>
 
@@ -187,6 +147,9 @@ import {
   ArrowRight
 } from '@element-plus/icons-vue'
 import { useFeaturesStore } from '@/stores/features'
+import { formatDate } from '@/utils/date'
+import { FeatureViewStatusLabels, FeatureViewStatusColors } from '@/constants/features'
+import StatCard from '@/components/StatCard.vue'
 
 const router = useRouter()
 const featuresStore = useFeaturesStore()
@@ -211,26 +174,9 @@ const goToDetail = (name) => {
   router.push({ name: 'FeatureViewDetail', params: { name } })
 }
 
-const getStatusType = (status) => {
-  const types = { DRAFT: 'info', ACTIVE: 'success', DEPRECATED: 'warning', ARCHIVED: 'danger' }
-  return types[status] || 'info'
-}
-
-const getStatusLabel = (status) => {
-  const labels = { DRAFT: '草稿', ACTIVE: '激活', DEPRECATED: '弃用', ARCHIVED: '归档' }
-  return labels[status] || status
-}
-
-const formatDate = (dateString) => {
-  if (!dateString) return '-'
-  const date = new Date(dateString)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}`
-}
+// 状态映射（统一从 constants/features.js 取）
+const getStatusType = (status) => FeatureViewStatusColors[status] || 'info'
+const getStatusLabel = (status) => FeatureViewStatusLabels[status] || status
 
 onMounted(() => {
   if (featuresStore.views.length === 0) {
@@ -263,38 +209,6 @@ onMounted(() => {
 
 .stats-row {
   margin-bottom: 24px;
-}
-
-.stat-card {
-  .stat-content {
-    display: flex;
-    align-items: center;
-  }
-
-  .stat-icon {
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    margin-right: 16px;
-  }
-
-  .stat-info {
-    .stat-value {
-      font-size: 24px;
-      font-weight: 600;
-      color: $text-primary;
-      line-height: 1.2;
-    }
-
-    .stat-label {
-      font-size: 13px;
-      color: $text-muted;
-      margin-top: 4px;
-    }
-  }
 }
 
 .quick-actions-card {

@@ -19,56 +19,16 @@
     <!-- 统计卡片 -->
     <el-row :gutter="16" class="stats-row">
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #ecf5ff; color: #409eff;">
-              <el-icon :size="24"><Box /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ models.length }}</div>
-              <div class="stat-label">总模型数</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="Box" tone="primary" :value="models.length" label="总模型数" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #f0f9ff; color: #67c23a;">
-              <el-icon :size="24"><CircleCheck /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ productionModels.length }}</div>
-              <div class="stat-label">生产环境</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="CircleCheck" tone="success" :value="productionModels.length" label="生产环境" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #fdf6ec; color: #e6a23c;">
-              <el-icon :size="24"><Timer /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ stagingModels.length }}</div>
-              <div class="stat-label">暂存环境</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="Timer" tone="warning" :value="stagingModels.length" label="暂存环境" />
       </el-col>
       <el-col :span="6">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #f0f9ff; color: #67c23a;">
-              <el-icon :size="24"><Cpu /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ modelCacheInfo.length }}</div>
-              <div class="stat-label">缓存模型</div>
-            </div>
-          </div>
-        </el-card>
+        <stat-card :icon="Cpu" tone="success" :value="modelCacheInfo.length" label="缓存模型" />
       </el-col>
     </el-row>
 
@@ -89,9 +49,9 @@
           </el-input>
           <el-select v-model="filterStage" placeholder="阶段筛选" clearable style="width: 140px; margin-left: 12px">
             <el-option label="全部" value="" />
-            <el-option label="生产环境" value="Production" />
-            <el-option label="暂存环境" value="Staging" />
-            <el-option label="已归档" value="Archived" />
+            <el-option label="生产" value="Production" />
+            <el-option label="暂存" value="Staging" />
+            <el-option label="归档" value="Archived" />
           </el-select>
           <el-button :icon="Refresh" style="margin-left: auto" @click="refreshData">
             刷新
@@ -382,6 +342,9 @@ import {
   Box, CircleCheck, CircleClose, Cpu, Search, Refresh, Timer
 } from '@element-plus/icons-vue'
 import { useServingStore } from '@/stores/serving'
+import { formatDateTime as formatDate } from '@/utils/date'
+import { ModelStageColors, ModelStageLabels } from '@/constants/status'
+import StatCard from '@/components/StatCard.vue'
 
 const servingStore = useServingStore()
 const activeTab = ref('registry')
@@ -432,24 +395,9 @@ const filteredModels = computed(() => {
   return result
 })
 
-// 阶段映射
-const getStageType = (stage) => {
-  const types = {
-    Production: 'success',
-    Staging: 'warning',
-    Archived: 'info'
-  }
-  return types[stage] || 'info'
-}
-
-const getStageLabel = (stage) => {
-  const labels = {
-    Production: '生产环境',
-    Staging: '暂存环境',
-    Archived: '已归档'
-  }
-  return labels[stage] || stage
-}
+// 阶段映射（统一从 constants/status.js 取，与 ModelList 保持一致）
+const getStageType = (stage) => ModelStageColors[stage] || 'info'
+const getStageLabel = (stage) => ModelStageLabels[stage] || stage
 
 // 刷新数据
 const refreshData = async () => {
@@ -459,7 +407,7 @@ const refreshData = async () => {
     await servingStore.fetchHealthStatus()
     ElMessage.success('刷新成功')
   } catch (error) {
-    ElMessage.error('刷新失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -479,7 +427,7 @@ const confirmDeploy = async () => {
     ElMessage.success('模型部署成功')
     showDeployDialog.value = false
   } catch (error) {
-    ElMessage.error('部署失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -494,9 +442,8 @@ const handlePromote = async (row) => {
     await servingStore.transitionModelStage(row.name, row.version, 'Production')
     ElMessage.success('模型已上线')
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('上线失败: ' + error.message)
-    }
+    if (error === 'cancel') return
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -520,7 +467,7 @@ const handlePredict = async () => {
       includeDetails: true
     })
   } catch (error) {
-    ElMessage.error('预测失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -543,7 +490,7 @@ const handleAbTest = async () => {
       abTestForm.value.ratio / 100
     )
   } catch (error) {
-    ElMessage.error('A/B测试失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -554,17 +501,9 @@ const handleClearCache = async () => {
     await servingStore.clearCache()
     ElMessage.success('缓存已清空')
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('清空缓存失败: ' + error.message)
-    }
+    if (error === 'cancel') return
+    // 错误已由 request.js 拦截器统一提示
   }
-}
-
-// 格式化日期
-const formatDate = (ts) => {
-  if (!ts) return '-'
-  const date = new Date(ts)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`
 }
 
 // 生命周期
@@ -600,38 +539,6 @@ onMounted(() => {
 
 .stats-row {
   margin-bottom: 24px;
-}
-
-.stat-card {
-  .stat-content {
-    display: flex;
-    align-items: center;
-  }
-
-  .stat-icon {
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    margin-right: 16px;
-  }
-
-  .stat-info {
-    .stat-value {
-      font-size: 24px;
-      font-weight: 600;
-      color: $text-primary;
-      line-height: 1.2;
-    }
-
-    .stat-label {
-      font-size: 13px;
-      color: $text-muted;
-      margin-top: 4px;
-    }
-  }
 }
 
 .serving-tabs {

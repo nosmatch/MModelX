@@ -172,6 +172,8 @@ import {
   DocumentAdd
 } from '@element-plus/icons-vue'
 import { useFeaturesStore } from '@/stores/features'
+import { formatDate as formatDateTime } from '@/utils/date'
+import { FeatureViewStatusLabels, FeatureViewStatusColors } from '@/constants/features'
 import FeatureDialog from './FeatureDialog.vue'
 
 // ==================== 路由和Store ====================
@@ -200,7 +202,7 @@ const loadViewDetail = async () => {
     await featuresStore.fetchView(viewName)
     viewDetail.value = featuresStore.currentView
   } catch (error) {
-    ElMessage.error('加载视图详情失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   } finally {
     loading.value = false
   }
@@ -289,9 +291,8 @@ const handleDelete = async () => {
     ElMessage.success('删除成功')
     goBack()
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败: ' + error.message)
-    }
+    if (error === 'cancel') return
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -333,9 +334,8 @@ const handleDeleteFeature = async (row, index) => {
     // 刷新详情
     await loadViewDetail()
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败: ' + (error.message || '未知错误'))
-    }
+    if (error === 'cancel') return
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -362,30 +362,10 @@ const formatConfig = (configStr) => {
 }
 
 /**
- * 获取状态类型
+ * 状态映射（统一从 constants/features.js 取）
  */
-const getStatusType = (status) => {
-  const types = {
-    DRAFT: 'info',
-    ACTIVE: 'success',
-    DEPRECATED: 'warning',
-    ARCHIVED: 'danger'
-  }
-  return types[status] || 'info'
-}
-
-/**
- * 获取状态标签
- */
-const getStatusLabel = (status) => {
-  const labels = {
-    DRAFT: '草稿',
-    ACTIVE: '激活',
-    DEPRECATED: '弃用',
-    ARCHIVED: '归档'
-  }
-  return labels[status] || status
-}
+const getStatusType = (status) => FeatureViewStatusColors[status] || 'info'
+const getStatusLabel = (status) => FeatureViewStatusLabels[status] || status
 
 /**
  * 获取数据类型标签类型
@@ -398,20 +378,6 @@ const getDataTypeTagType = (dtype) => {
     BOOLEAN: 'info'
   }
   return types[dtype] || 'info'
-}
-
-/**
- * 格式化日期时间
- */
-const formatDateTime = (timestamp) => {
-  if (!timestamp) return '-'
-  const date = new Date(timestamp)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}`
 }
 
 // ==================== 生命周期 ====================

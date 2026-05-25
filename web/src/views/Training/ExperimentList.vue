@@ -204,6 +204,8 @@ import {
   Search, Refresh, Plus, View, Collection
 } from '@element-plus/icons-vue'
 import { useTrainingStore } from '@/stores/training'
+import { formatDate } from '@/utils/date'
+import { ExperimentStatusColors, ExperimentStatusLabels } from '@/constants/status'
 
 const trainingStore = useTrainingStore()
 
@@ -248,7 +250,7 @@ const loadExperiments = async () => {
   try {
     await trainingStore.fetchExperiments()
   } catch (error) {
-    ElMessage.error('加载实验列表失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -280,21 +282,15 @@ const handleCreateSubmit = async () => {
     showCreateDialog.value = false
     await loadExperiments()
   } catch (error) {
-    ElMessage.error('创建失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   } finally {
     creating.value = false
   }
 }
 
-const getStatusType = (status) => {
-  const types = { RUNNING: 'primary', COMPLETED: 'success', FAILED: 'danger' }
-  return types[status] || 'info'
-}
-
-const getStatusLabel = (status) => {
-  const labels = { RUNNING: '运行中', COMPLETED: '已完成', FAILED: '失败' }
-  return labels[status] || status
-}
+// 状态映射（统一从 constants/status.js 取）
+const getStatusType = (status) => ExperimentStatusColors[status] || 'info'
+const getStatusLabel = (status) => ExperimentStatusLabels[status] || status
 
 const formatMetrics = (metrics) => {
   if (!metrics) return {}
@@ -303,17 +299,6 @@ const formatMetrics = (metrics) => {
     result[key] = typeof value === 'number' ? value.toFixed(4) : value
   }
   return result
-}
-
-const formatDate = (dateString) => {
-  if (!dateString) return '-'
-  const date = new Date(dateString)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}`
 }
 
 onMounted(() => {

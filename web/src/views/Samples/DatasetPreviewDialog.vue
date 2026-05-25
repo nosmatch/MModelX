@@ -120,10 +120,10 @@ const loadPreview = async () => {
       columns.value = data.columns || []
       tableData.value = data.data || []
     } else {
-      ElMessage.error(res.message || '加载预览数据失败')
+      // 非成功状态码已由 request.js 拦截器统一提示
     }
   } catch (error) {
-    ElMessage.error('加载预览数据失败: ' + (error.message || '未知错误'))
+    // 错误已由 request.js 拦截器统一提示
   } finally {
     loading.value = false
   }

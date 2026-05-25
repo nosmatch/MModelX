@@ -78,6 +78,8 @@ import { ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { useDeploymentStore } from '@/stores/deployment'
+import { formatDate } from '@/utils/date'
+import { PodStatusColors } from '@/constants/status'
 
 const props = defineProps({
   deploymentId: {
@@ -103,7 +105,7 @@ const refreshPods = async () => {
   try {
     await deploymentStore.fetchPods(props.deploymentId)
   } catch (error) {
-    ElMessage.error('刷新 Pod 列表失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -118,7 +120,7 @@ const fetchLogs = async () => {
   try {
     await deploymentStore.fetchPodLogs(props.deploymentId, selectedPod.value.name, logTailLines.value)
   } catch (error) {
-    ElMessage.error('获取日志失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -136,27 +138,13 @@ const handleRestart = async (row) => {
     await deploymentStore.restartPod(props.deploymentId, row.name)
     ElMessage.success('重启成功')
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('重启失败: ' + error.message)
-    }
+    if (error === 'cancel') return
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
-const getStatusType = (status) => {
-  const types = {
-    Running: 'success',
-    Pending: 'warning',
-    Failed: 'danger',
-    Succeeded: 'primary'
-  }
-  return types[status] || 'info'
-}
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '-'
-  const date = new Date(dateStr)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-}
+// Pod 状态映射（统一从 constants/status.js 取）
+const getStatusType = (status) => PodStatusColors[status] || 'info'
 
 // 监听 deploymentId 变化，自动加载 Pod
 watch(() => props.deploymentId, (newId) => {

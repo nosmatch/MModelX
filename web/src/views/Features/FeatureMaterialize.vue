@@ -529,6 +529,7 @@ import {
 } from '@element-plus/icons-vue'
 import { useFeaturesStore } from '@/stores/features'
 import { DataSourceTypeLabels } from '@/constants/features'
+import { formatDate as formatDateTime } from '@/utils/date'
 import { previewFeatures, getRedisStatus, searchRedisKeys as apiSearchRedisKeys, getMaterializeHistory } from '@/api/modules/features'
 
 // ==================== Store ====================
@@ -727,7 +728,7 @@ const refreshStats = async () => {
     await loadMaterializeHistory()
     ElMessage.success('统计信息已刷新')
   } catch (error) {
-    ElMessage.error('刷新失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -852,7 +853,7 @@ const completeMaterialize = (status, errorMsg = '') => {
     loadMaterializeHistory()
   } else {
     materializeStatus.value = 'exception'
-    ElMessage.error('物化失败: ' + (errorMsg || '未知错误'))
+    // 错误已由 request.js 拦截器统一提示，此处仅设置 UI 状态
   }
 
   // 最终统计数据
@@ -886,7 +887,7 @@ const handlePreview = async () => {
       throw new Error(response.message || '预览失败')
     }
   } catch (error) {
-    ElMessage.error('预览失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -912,7 +913,7 @@ const searchRedisKeys = async () => {
       redisKeys.value = []
     }
   } catch (error) {
-    ElMessage.error('搜索失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
     redisKeys.value = []
   }
 }
@@ -925,7 +926,7 @@ const viewKeyValue = async (key) => {
     // 调用API获取Key的值
     ElMessage.info(`查看Key: ${key}`)
   } catch (error) {
-    ElMessage.error('获取失败: ' + error.message)
+    // 错误已由 request.js 拦截器统一提示
   }
 }
 
@@ -961,9 +962,8 @@ const handleCleanup = async () => {
     showCleanupDialog.value = false
     refreshStats()
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('清理失败: ' + error.message)
-    }
+    if (error === 'cancel') return
+    // 错误已由 request.js 拦截器统一提示
   } finally {
     cleaning.value = false
   }
@@ -1041,20 +1041,6 @@ const getStatusLabel = (status) => {
     pending: '等待中'
   }
   return labels[status] || status
-}
-
-/**
- * 格式化日期时间
- */
-const formatDateTime = (timestamp) => {
-  if (!timestamp) return '-'
-  const date = new Date(timestamp)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}`
 }
 
 // ==================== 生命周期 ====================
