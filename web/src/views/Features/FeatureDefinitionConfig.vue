@@ -1,10 +1,9 @@
 <template>
   <div class="feature-definition-config">
-    <!-- 页面头部 -->
-    <div class="page-header">
+    <!-- 操作栏 -->
+    <div class="action-bar">
       <div class="header-left">
         <el-button :icon="ArrowLeft" @click="goBack">返回</el-button>
-        <h2 class="page-title">特征定义配置</h2>
       </div>
       <div class="header-right">
         <el-select
@@ -833,7 +832,7 @@ onMounted(async () => {
   border-radius: $radius-md;
 }
 
-.page-header {
+.action-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -845,13 +844,6 @@ onMounted(async () => {
     display: flex;
     align-items: center;
     gap: 16px;
-
-    .page-title {
-      font-size: 20px;
-      font-weight: 600;
-      color: #303133;
-      margin: 0;
-    }
   }
 
   .header-right {
@@ -1010,7 +1002,7 @@ onMounted(async () => {
 
 // 响应式
 @media (max-width: 768px) {
-  .page-header {
+  .action-bar {
     flex-direction: column;
     gap: 12px;
 

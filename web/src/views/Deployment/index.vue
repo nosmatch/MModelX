@@ -1,18 +1,5 @@
 <template>
   <div class="deployment-page">
-    <!-- 页面标题 -->
-    <div class="page-header">
-      <div class="header-left">
-        <h3 class="page-title">K8s 部署管理</h3>
-        <p class="page-desc">管理模型在 Kubernetes 集群中的部署实例</p>
-      </div>
-      <div class="header-right">
-        <el-button :icon="Refresh" @click="refreshData">
-          刷新
-        </el-button>
-      </div>
-    </div>
-
     <!-- Namespace 选择器 + 统计卡片 -->
     <el-row :gutter="16" class="stats-row">
       <el-col :span="6">
@@ -440,26 +427,6 @@ onMounted(() => {
 <style scoped lang="scss">
 .deployment-page {
   padding: 24px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-
-  .page-title {
-    margin: 0 0 8px 0;
-    font-size: 20px;
-    font-weight: 600;
-    color: $text-primary;
-  }
-
-  .page-desc {
-    margin: 0;
-    font-size: 14px;
-    color: $text-muted;
-  }
 }
 
 .stats-row {

@@ -1,11 +1,5 @@
 <template>
   <div class="features-page">
-    <!-- 页面标题 -->
-    <div class="page-header">
-      <h2 class="page-title">特征工程</h2>
-      <p class="page-desc">管理和计算机器学习特征，支持离线计算和在线查询</p>
-    </div>
-
     <!-- 统计卡片 -->
     <el-row :gutter="16" class="stats-row">
       <el-col :span="6">
@@ -188,23 +182,6 @@ onMounted(() => {
 <style scoped lang="scss">
 .features-page {
   padding: 24px;
-}
-
-.page-header {
-  margin-bottom: 24px;
-
-  .page-title {
-    font-size: 24px;
-    font-weight: 600;
-    color: $text-primary;
-    margin: 0 0 8px 0;
-  }
-
-  .page-desc {
-    font-size: 14px;
-    color: $text-secondary;
-    margin: 0;
-  }
 }
 
 .stats-row {

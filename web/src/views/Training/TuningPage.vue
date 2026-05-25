@@ -1,13 +1,5 @@
 <template>
   <div class="tuning-page">
-    <!-- 页面标题 -->
-    <div class="page-header">
-      <div class="header-left">
-        <h3 class="page-title">超参数调优</h3>
-        <p class="page-desc">自动搜索最佳超参数组合，提升模型性能</p>
-      </div>
-    </div>
-
     <el-row :gutter="24">
       <!-- 左侧：配置面板 -->
       <el-col :span="10">
@@ -424,23 +416,6 @@ const handleRegisterModel = async () => {
 <style scoped lang="scss">
 .tuning-page {
   padding: 24px;
-}
-
-.page-header {
-  margin-bottom: 24px;
-
-  .page-title {
-    margin: 0 0 8px 0;
-    font-size: 20px;
-    font-weight: 600;
-    color: $text-primary;
-  }
-
-  .page-desc {
-    margin: 0;
-    font-size: 14px;
-    color: $text-muted;
-  }
 }
 
 .config-card,

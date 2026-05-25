@@ -1,19 +1,13 @@
 <template>
   <div class="serving-page">
-    <!-- 页面标题 -->
-    <div class="page-header">
-      <div class="header-left">
-        <h3 class="page-title">模型部署</h3>
-        <p class="page-desc">管理模型注册、部署、A/B测试和在线推理</p>
-      </div>
-      <div class="header-right">
-        <el-tag v-if="healthStatus?.status === 'healthy'" type="success" effect="dark">
-          <el-icon><CircleCheck /></el-icon> 服务正常
-        </el-tag>
-        <el-tag v-else type="danger" effect="dark">
-          <el-icon><CircleClose /></el-icon> 服务异常
-        </el-tag>
-      </div>
+    <!-- 健康状态 -->
+    <div class="health-bar">
+      <el-tag v-if="healthStatus?.status === 'healthy'" type="success" effect="dark">
+        <el-icon><CircleCheck /></el-icon> 服务正常
+      </el-tag>
+      <el-tag v-else type="danger" effect="dark">
+        <el-icon><CircleClose /></el-icon> 服务异常
+      </el-tag>
     </div>
 
     <!-- 统计卡片 -->
@@ -517,24 +511,10 @@ onMounted(() => {
   padding: 24px;
 }
 
-.page-header {
+.health-bar {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-
-  .page-title {
-    margin: 0 0 8px 0;
-    font-size: 20px;
-    font-weight: 600;
-    color: $text-primary;
-  }
-
-  .page-desc {
-    margin: 0;
-    font-size: 14px;
-    color: $text-muted;
-  }
+  justify-content: flex-end;
+  margin-bottom: 12px;
 }
 
 .stats-row {

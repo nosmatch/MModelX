@@ -1,11 +1,8 @@
 <template>
   <div class="sample-build-page">
-    <!-- 页面标题 -->
-    <div class="page-header">
-      <div class="header-left">
-        <el-button text :icon="ArrowLeft" @click="goBack">返回</el-button>
-        <h2 class="page-title">样本构建</h2>
-      </div>
+    <!-- 返回按钮 -->
+    <div class="back-nav">
+      <el-button text :icon="ArrowLeft" @click="goBack">返回</el-button>
     </div>
 
     <el-row :gutter="24">
@@ -295,21 +292,8 @@ onMounted(() => {
   padding: 24px;
 }
 
-.page-header {
-  margin-bottom: 24px;
-
-  .header-left {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-
-    .page-title {
-      font-size: 20px;
-      font-weight: 600;
-      margin: 0;
-      color: $text-primary;
-    }
-  }
+.back-nav {
+  margin-bottom: 20px;
 }
 
 .config-card {
