@@ -1,9 +1,9 @@
 package com.mogu.data.serving.service;
 
 import com.mogu.data.common.exception.BusinessException;
+import com.mogu.data.common.serving.ModelPredictor;
 import com.mogu.data.serving.entity.PredictionRequest;
 import com.mogu.data.serving.entity.PredictionResponse;
-import com.mogu.data.training.service.Trainer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,8 +26,8 @@ public class PredictorService {
     private final ModelLoaderService modelLoaderService;
     private final FeatureClientService featureClientService;
 
-    // 训练器映射（用于预测）
-    private final java.util.Map<String, Trainer> trainerMap;
+    // 预测器映射（按框架类型）
+    private final java.util.Map<String, ModelPredictor> predictorMap;
 
     /**
      * 单条预测
@@ -64,7 +64,7 @@ public class PredictorService {
             }
 
             // 3. 预测
-            List<Double> predictions = getTrainer(request.getModelName()).predict(model, features);
+            List<Double> predictions = getPredictor(request.getModelName()).predict(model, features);
             Double prediction = predictions.get(0);
 
             // 4. 构建响应
@@ -153,16 +153,17 @@ public class PredictorService {
     }
 
     /**
-     * 获取训练器
+     * 获取预测器
      */
-    private Trainer getTrainer(String modelName) {
-        // 这里简化了实现，实际需要根据模型名称或类型获取对应的训练器
-        String trainerName = "lightGBMTrainer"; // 默认使用LightGBM
-        Trainer trainer = trainerMap.get(trainerName);
-        if (trainer == null) {
-            throw new BusinessException("找不到对应的训练器: " + trainerName);
+    private ModelPredictor getPredictor(String modelName) {
+        // 根据模型名称推断框架类型，实际应从模型元数据获取
+        String frameworkType = modelName.toLowerCase().contains("xgb") ? "xgboost" : "lightgbm";
+        String predictorName = frameworkType.equals("xgboost") ? "xgBoostPredictor" : "lightGBMPredictor";
+        ModelPredictor predictor = predictorMap.get(predictorName);
+        if (predictor == null) {
+            throw new BusinessException("找不到对应的预测器: " + predictorName);
         }
-        return trainer;
+        return predictor;
     }
 
     /**

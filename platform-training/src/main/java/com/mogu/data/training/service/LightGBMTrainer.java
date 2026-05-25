@@ -23,6 +23,11 @@ public class LightGBMTrainer implements Trainer {
     private final MinioService minioService;
 
     @Override
+    public String getFrameworkType() {
+        return "lightgbm";
+    }
+
+    @Override
     public String train(TrainingConfig config) {
         log.info("开始LightGBM训练: {}", config.getExperimentName());
 

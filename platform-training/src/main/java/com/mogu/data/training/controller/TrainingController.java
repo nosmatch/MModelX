@@ -1,9 +1,10 @@
 package com.mogu.data.training.controller;
 
+import com.mogu.data.common.dto.ExperimentDTO;
+import com.mogu.data.common.dto.ModelDTO;
 import com.mogu.data.common.entity.TrainingJob;
+import com.mogu.data.common.registry.MlflowRegistryService;
 import com.mogu.data.common.result.Result;
-import com.mogu.data.training.dto.ExperimentDTO;
-import com.mogu.data.training.dto.ModelDTO;
 import com.mogu.data.training.entity.TrainingConfig;
 import com.mogu.data.training.service.*;
 import lombok.RequiredArgsConstructor;

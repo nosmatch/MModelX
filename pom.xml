@@ -25,6 +25,7 @@
         <module>platform-sample</module>
         <module>platform-training</module>
         <module>platform-serving</module>
+        <module>platform-deployment</module>
         <module>platform-api</module>
     </modules>
 
@@ -55,6 +56,7 @@
         <grafana.version>0.0.1</grafana.version>
         <springdoc.version>1.7.0</springdoc.version>
         <jwt.version>0.11.5</jwt.version>
+        <k8s-client.version>16.0.2</k8s-client.version>
     </properties>
 
     <dependencyManagement>
@@ -83,6 +85,11 @@
             <dependency>
                 <groupId>com.mogu.data</groupId>
                 <artifactId>platform-serving</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.mogu.data</groupId>
+                <artifactId>platform-deployment</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
@@ -240,6 +247,30 @@
                 <artifactId>flyway-core</artifactId>
                 <version>8.5.13</version>
             </dependency>
+
+            <!-- Kubernetes Client -->
+            <dependency>
+                <groupId>io.kubernetes</groupId>
+                <artifactId>client-java</artifactId>
+                <version>${k8s-client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.kubernetes</groupId>
+                <artifactId>client-java-api</artifactId>
+                <version>${k8s-client.version}</version>
+            </dependency>
+
+            <!-- Gson (K8s client transitive dependency) -->
+            <dependency>
+                <groupId>com.google.code.gson</groupId>
+                <artifactId>gson</artifactId>
+                <version>2.10.1</version>
+            </dependency>
+            <dependency>
+                <groupId>io.gsonfire</groupId>
+                <artifactId>gson-fire</artifactId>
+                <version>1.8.5</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -274,6 +305,17 @@
     </build>
 
     <repositories>
+        <repository>
+            <id>maven-central</id>
+            <name>Maven Central</name>
+            <url>https://repo1.maven.org/maven2</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
         <repository>
             <id>aliyun</id>
             <name>Aliyun Maven Repository</name>

@@ -17,7 +17,7 @@ import java.util.Map;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/serving")
+@RequestMapping("/api/v1/serving")
 @RequiredArgsConstructor
 public class ServingController {
 

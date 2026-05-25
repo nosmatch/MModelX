@@ -1,12 +1,13 @@
 package com.mogu.data.training.service;
 
+import com.mogu.data.common.serving.ModelPredictor;
 import com.mogu.data.training.entity.TrainingConfig;
 
 /**
  * 训练器接口
- * 定义模型训练的通用接口
+ * 定义模型训练的通用接口，同时继承 ModelPredictor 提供推理能力
  */
-public interface Trainer {
+public interface Trainer extends ModelPredictor {
 
     /**
      * 训练模型
@@ -30,19 +31,4 @@ public interface Trainer {
      * @return 保存后的路径
      */
     String saveModel(String modelPath, String modelName);
-
-    /**
-     * 加载模型
-     * @param modelPath 模型路径
-     * @return 模型对象
-     */
-    Object loadModel(String modelPath);
-
-    /**
-     * 预测
-     * @param model 模型对象
-     * @param features 特征数据
-     * @return 预测结果
-     */
-    java.util.List<Double> predict(Object model, java.util.Map<String, Object> features);
 }

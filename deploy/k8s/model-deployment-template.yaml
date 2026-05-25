@@ -1,0 +1,114 @@
+# K8s 模型部署资源模板
+# 此文件为参考模板，实际通过 Java K8s Client 以编程方式创建资源
+# 用于开发和调试时手动 apply
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: recsys
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mmodelx-ctr-model-v1-config
+  namespace: recsys
+data:
+  model.json: |
+    {
+      "modelName": "ctr-model",
+      "modelVersion": "v1",
+      "framework": "lightgbm",
+      "modelType": "CLASSIFICATION",
+      "filePath": "models/ctr-model/v1/model.txt",
+      "minioEndpoint": "http://minio:9002",
+      "minioBucket": "mmodelx"
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mmodelx-ctr-model-v1
+  namespace: recsys
+  labels:
+    app: mmodelx-ctr-model-v1
+    managed-by: mmodelx
+    model-name: ctr-model
+    model-version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mmodelx-ctr-model-v1
+      managed-by: mmodelx
+  template:
+    metadata:
+      labels:
+        app: mmodelx-ctr-model-v1
+        managed-by: mmodelx
+        model-name: ctr-model
+        model-version: v1
+    spec:
+      containers:
+        - name: mmodelx-ctr-model-v1
+          image: mmodelx-inference:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: MODEL_NAME
+              value: "ctr-model"
+            - name: MODEL_VERSION
+              value: "v1"
+            - name: MODEL_FRAMEWORK
+              value: "lightgbm"
+            - name: MINIO_ENDPOINT
+              value: "http://minio:9002"
+            - name: MINIO_ACCESS_KEY
+              value: "minioadmin"
+            - name: MINIO_SECRET_KEY
+              value: "minioadmin"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          volumeMounts:
+            - name: model-config
+              mountPath: /etc/model-config
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: model-config
+          configMap:
+            name: mmodelx-ctr-model-v1-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mmodelx-ctr-model-v1-svc
+  namespace: recsys
+  labels:
+    app: mmodelx-ctr-model-v1
+    managed-by: mmodelx
+spec:
+  selector:
+    app: mmodelx-ctr-model-v1
+    managed-by: mmodelx
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP

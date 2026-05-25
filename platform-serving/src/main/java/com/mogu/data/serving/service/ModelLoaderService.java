@@ -1,10 +1,10 @@
 package com.mogu.data.serving.service;
 
+import com.mogu.data.common.dto.ModelDTO;
 import com.mogu.data.common.exception.BusinessException;
+import com.mogu.data.common.registry.MlflowRegistryService;
 import com.mogu.data.common.storage.MinioService;
 import com.mogu.data.common.storage.RedisService;
-import com.mogu.data.training.dto.ModelDTO;
-import com.mogu.data.training.service.MlflowRegistryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

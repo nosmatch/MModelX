@@ -23,6 +23,11 @@ public class XGBoostTrainer implements Trainer {
     private final MinioService minioService;
 
     @Override
+    public String getFrameworkType() {
+        return "xgboost";
+    }
+
+    @Override
     public String train(TrainingConfig config) {
         log.info("开始XGBoost训练: {}", config.getExperimentName());
 

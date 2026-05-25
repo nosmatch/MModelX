@@ -1,4 +1,4 @@
-package com.mogu.data.training.dto;
+package com.mogu.data.common.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

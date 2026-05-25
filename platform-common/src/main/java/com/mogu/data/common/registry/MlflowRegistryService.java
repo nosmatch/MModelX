@@ -1,14 +1,14 @@
-package com.mogu.data.training.service;
+package com.mogu.data.common.registry;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mogu.data.common.dto.ExperimentDTO;
+import com.mogu.data.common.dto.ModelDTO;
 import com.mogu.data.common.entity.Experiment;
 import com.mogu.data.common.entity.Model;
 import com.mogu.data.common.exception.BusinessException;
 import com.mogu.data.common.repository.ExperimentRepository;
 import com.mogu.data.common.repository.ModelRepository;
-import com.mogu.data.training.dto.ExperimentDTO;
-import com.mogu.data.training.dto.ModelDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * MLflow模型注册服务
  * 管理实验追踪和模型注册
+ * 移动到 platform-common，供 training 和 serving 共享
  */
 @Slf4j
 @Service
@@ -197,8 +198,8 @@ public class MlflowRegistryService {
             return id;
 
         } catch (Exception e) {
-            log.error("注册模型失败: {}", e.getMessage(), e);
-            throw new BusinessException("注册模型失败: " + e.getMessage());
+            log.error("模型注册失败: {}", e.getMessage(), e);
+            throw new BusinessException("模型注册失败: " + e.getMessage());
         }
     }
 

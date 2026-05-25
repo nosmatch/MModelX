@@ -145,14 +145,32 @@
           </div>
         </div>
 
-        <!-- 模型部署 -->
-        <div
-          class="nav-item"
-          :class="{ active: $route.path === '/serving' }"
-          @click="navigate('/serving')"
-        >
-<!--          <span class="nav-icon">🚀</span>-->
-          <span class="nav-text">模型部署</span>
+        <!-- 模型部署（可展开） -->
+        <div class="nav-group">
+          <div
+            class="nav-item group-header"
+            :class="{ active: isServingActive, expanded: expandedMenus.serving }"
+            @click="toggleMenu('serving')"
+          >
+            <span class="nav-text">模型部署</span>
+            <span class="expand-icon">{{ expandedMenus.serving ? '▼' : '▶' }}</span>
+          </div>
+          <div v-show="expandedMenus.serving" class="nav-submenu">
+            <div
+              class="nav-item sub-item"
+              :class="{ active: $route.path === '/serving' }"
+              @click="navigate('/serving')"
+            >
+              <span class="nav-text">模型注册表</span>
+            </div>
+            <div
+              class="nav-item sub-item"
+              :class="{ active: $route.path === '/deployment' }"
+              @click="navigate('/deployment')"
+            >
+              <span class="nav-text">K8s 部署管理</span>
+            </div>
+          </div>
         </div>
 
         <!-- 数据源管理 -->
@@ -213,7 +231,8 @@ const route = useRoute()
 const expandedMenus = ref({
   features: true,  // 默认展开特征工程子菜单
   samples: false,
-  training: false
+  training: false,
+  serving: false
 })
 
 // 检查特征工程菜单是否激活
@@ -229,6 +248,11 @@ const isSamplesActive = computed(() => {
 // 检查训练管理菜单是否激活
 const isTrainingActive = computed(() => {
   return route.path.startsWith('/training')
+})
+
+// 检查模型部署菜单是否激活
+const isServingActive = computed(() => {
+  return route.path === '/serving' || route.path === '/deployment'
 })
 
 // 页面标题
@@ -250,7 +274,8 @@ const pageTitle = computed(() => {
     '/training/models': '模型列表',
     '/training/tuning': '超参数调优',
     '/training': '训练管理',
-    '/serving': '模型部署',
+    '/serving': '模型注册表',
+    '/deployment': 'K8s 部署管理',
     '/datasources': '数据源管理'
   }
   return titles[route.path] || 'MModelX'

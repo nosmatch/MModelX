@@ -47,6 +47,22 @@
             <artifactId>platform-serving</artifactId>
         </dependency>
 
+        <!-- Platform Deployment -->
+        <dependency>
+            <groupId>com.mogu.data</groupId>
+            <artifactId>platform-deployment</artifactId>
+        </dependency>
+
+        <!-- K8s Client transitive deps (explicit for fat jar packaging) -->
+        <dependency>
+            <groupId>io.gsonfire</groupId>
+            <artifactId>gson-fire</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+        </dependency>
+
         <!-- Spring Boot Starters -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

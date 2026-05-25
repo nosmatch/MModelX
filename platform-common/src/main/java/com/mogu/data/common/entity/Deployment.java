@@ -63,6 +63,44 @@ public class Deployment {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    // ==================== K8s 扩展字段 ====================
+
+    @Column(length = 100)
+    private String namespace;
+
+    @Column(nullable = false)
+    private Integer replicas = 1;
+
+    @Column(length = 255)
+    private String image;
+
+    @Column(length = 20)
+    private String cpuRequest = "500m";
+
+    @Column(length = 20)
+    private String memoryRequest = "512Mi";
+
+    @Column(length = 20)
+    private String cpuLimit = "2000m";
+
+    @Column(length = 20)
+    private String memoryLimit = "2Gi";
+
+    @Column(length = 100)
+    private String serviceName;
+
+    @Column(length = 100)
+    private String deploymentName;
+
+    @Column(length = 50)
+    private String k8sStatus;
+
+    @Column
+    private Integer availableReplicas = 0;
+
+    @Column
+    private Integer readyReplicas = 0;
+
     /**
      * 部署环境枚举
      */

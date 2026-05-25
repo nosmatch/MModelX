@@ -108,6 +108,19 @@ logging:
     max-size: 100MB
     max-history: 30
 
+# K8s 配置
+k8s:
+  enabled: true
+  kubeconfig-path: /tmp/kind-mmodelx-kubeconfig.yaml
+  master-url: ${K8S_MASTER_URL:}
+  token: ${K8S_TOKEN:}
+  verify-ssl: false
+
+# 推理服务镜像配置
+inference:
+  image: mmodelx-inference:latest
+  port: 8080
+
 # JWT配置
 jwt:
   secret: mmodelx-secret-key-for-jwt-token-generation-must-be-long-enough-for-hs512-algorithm

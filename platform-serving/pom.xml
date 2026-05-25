@@ -29,12 +29,6 @@
             <artifactId>platform-feature</artifactId>
         </dependency>
 
-        <!-- Platform Training -->
-        <dependency>
-            <groupId>com.mogu.data</groupId>
-            <artifactId>platform-training</artifactId>
-        </dependency>
-
         <!-- Spring Boot Starters -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

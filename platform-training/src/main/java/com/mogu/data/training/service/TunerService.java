@@ -1,8 +1,9 @@
 package com.mogu.data.training.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mogu.data.common.dto.ExperimentDTO;
 import com.mogu.data.common.exception.BusinessException;
-import com.mogu.data.training.dto.ExperimentDTO;
+import com.mogu.data.common.registry.MlflowRegistryService;
 import com.mogu.data.training.entity.TrainingConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
