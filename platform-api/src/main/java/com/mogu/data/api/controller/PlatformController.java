@@ -1,7 +1,10 @@
 package com.mogu.data.api.controller;
 
+import com.mogu.data.api.service.PlatformHealthService;
 import com.mogu.data.common.result.Result;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -15,7 +18,11 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api")
 @CrossOrigin(origins = "*")
+@RequiredArgsConstructor
 public class PlatformController {
+
+    private final PlatformHealthService platformHealthService;
+    private final Environment environment;
 
     /**
      * 平台信息
@@ -36,18 +43,7 @@ public class PlatformController {
      */
     @GetMapping("/health")
     public Result<Map<String, Object>> healthCheck() {
-        Map<String, Object> health = new HashMap<>();
-        health.put("status", "UP");
-        health.put("timestamp", System.currentTimeMillis());
-
-        Map<String, String> components = new HashMap<>();
-        components.put("feature", "UP");
-        components.put("sample", "UP");
-        components.put("training", "UP");
-        components.put("serving", "UP");
-        health.put("components", components);
-
-        return Result.success(health);
+        return Result.success(platformHealthService.buildHealthReport());
     }
 
     /**
@@ -59,6 +55,7 @@ public class PlatformController {
         status.put("platform", "MModelX");
         status.put("version", "1.0.0-SNAPSHOT");
         status.put("uptime", System.currentTimeMillis());
+        status.put("health", platformHealthService.buildHealthReport());
 
         Map<String, String> modules = new HashMap<>();
         modules.put("platform-common", "ACTIVE");
@@ -79,10 +76,11 @@ public class PlatformController {
     public Result<Map<String, String>> getApiDocs() {
         Map<String, String> docs = new HashMap<>();
         docs.put("swagger", "/swagger-ui.html");
-        docs.put("features", "/api/features/**");
-        docs.put("samples", "/api/samples/**");
-        docs.put("training", "/api/training/**");
-        docs.put("serving", "/api/serving/**");
+        docs.put("features", "/api/v1/features/**");
+        docs.put("samples", "/api/v1/samples/**");
+        docs.put("training", "/api/v1/training/**");
+        docs.put("serving", "/api/v1/serving/**");
+        docs.put("deployment", "/api/v1/deployment/**");
         docs.put("actuator", "/actuator/**");
         return Result.success(docs);
     }
@@ -93,10 +91,11 @@ public class PlatformController {
     @GetMapping("/config")
     public Result<Map<String, Object>> getConfig() {
         Map<String, Object> config = new HashMap<>();
-        config.put("environment", System.getenv().getOrDefault("ENVIRONMENT", "development"));
+        String[] profiles = environment.getActiveProfiles();
+        config.put("environment", profiles.length > 0 ? String.join(",", profiles) : "default");
         config.put("timezone", java.time.ZoneId.systemDefault().toString());
         config.put("javaVersion", System.getProperty("java.version"));
-        config.put("springBootVersion", "3.2.0");
+        config.put("springBootVersion", "2.7.18");
         return Result.success(config);
     }
 }

@@ -1,10 +1,13 @@
 package com.mogu.data.common.config;
 
 import com.mogu.data.common.security.JwtAuthenticationFilter;
+import com.mogu.data.common.security.RestAccessDeniedHandler;
+import com.mogu.data.common.security.RestAuthenticationEntryPoint;
 import com.mogu.data.common.security.UserDetailsServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
@@ -36,12 +39,17 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
     private final UserDetailsServiceImpl userDetailsService;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
+    private final RestAccessDeniedHandler restAccessDeniedHandler;
 
     private static final String[] WHITELIST = {
             "/api/auth/**",
             "/api/health",
-            "/api/v1/**",  // 允许API v1访问
-            "/actuator/**",
+            "/api/info",
+            "/api/docs",
+            "/actuator/health",
+            "/actuator/info",
+            "/actuator/prometheus",
             "/swagger-ui/**",
             "/v3/api-docs/**",
             "/swagger-resources/**",
@@ -65,17 +73,38 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                     .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
 
                 .and()
+                .exceptionHandling()
+                    .authenticationEntryPoint(restAuthenticationEntryPoint)
+                    .accessDeniedHandler(restAccessDeniedHandler)
+
+                .and()
 
                 // 配置授权规则
                 .authorizeRequests()
                         // 白名单路径无需认证
                         .antMatchers(WHITELIST).permitAll()
-                        // 管理员接口需要ADMIN权限
+                        // 管理员接口
                         .antMatchers("/api/admin/**").hasRole("ADMIN")
-                        // 写操作需要WRITE权限
-                        .antMatchers("/api/features/**", "/api/samples/**")
-                            .hasAnyAuthority("PERM_WRITE", "PERM_ALL")
-                        // 其他请求需要认证
+                        // 部署管理：仅 MLOPS / ADMIN
+                        .antMatchers("/api/v1/deployment/**").hasAnyRole("MLOPS", "ADMIN")
+                        // 训练、推理：ENGINEER / MLOPS / ADMIN
+                        .antMatchers("/api/v1/training/**", "/api/v1/serving/**")
+                            .hasAnyRole("ENGINEER", "MLOPS", "ADMIN")
+                        // 特征、样本模块写权限：ENGINEER / ADMIN
+                        .antMatchers(HttpMethod.POST, "/api/v1/features/**", "/api/v1/samples/**")
+                            .hasAnyRole("ENGINEER", "ADMIN")
+                        .antMatchers(HttpMethod.PUT, "/api/v1/features/**", "/api/v1/samples/**")
+                            .hasAnyRole("ENGINEER", "ADMIN")
+                        .antMatchers(HttpMethod.DELETE, "/api/v1/features/**", "/api/v1/samples/**")
+                            .hasAnyRole("ENGINEER", "ADMIN")
+                        // 特征、样本模块读权限：所有已登录角色
+                        .antMatchers(HttpMethod.GET, "/api/v1/features/**", "/api/v1/samples/**")
+                            .hasAnyRole("ENGINEER", "MLOPS", "ADMIN")
+                        // 数据源管理：MLOPS / ADMIN
+                        .antMatchers("/api/v1/datasources/**").hasAnyRole("MLOPS", "ADMIN")
+                        // 其余 /api/v1/** 默认要求登录
+                        .antMatchers("/api/v1/**").authenticated()
+                        // 其他请求默认要求登录
                         .anyRequest().authenticated()
 
                 .and()

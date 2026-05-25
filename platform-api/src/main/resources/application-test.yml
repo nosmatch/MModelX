@@ -1,0 +1,15 @@
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/mmodelx_test}
+  jpa:
+    show-sql: false
+
+logging:
+  level:
+    com.mogu.data: INFO
+
+k8s:
+  enabled: false

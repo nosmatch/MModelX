@@ -1,0 +1,33 @@
+# KinD 集群配置文件
+# 用于本地开发环境模拟 K8s 集群
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: mmodelx
+
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        apiVersion: kubeadm.k8s.io/v1beta3
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      # 将 KinD 内部的 NodePort 映射到宿主机
+      - containerPort: 30080
+        hostPort: 30080
+        protocol: TCP
+      - containerPort: 30443
+        hostPort: 30443
+        protocol: TCP
+
+  - role: worker
+    labels:
+      app: inference
+
+# 可选：配置容器运行时网络
+networking:
+  apiServerAddress: "127.0.0.1"
+  apiServerPort: 6443

@@ -1,0 +1,10 @@
+spring:
+  jpa:
+    show-sql: true
+
+logging:
+  level:
+    com.mogu.data: DEBUG
+
+k8s:
+  enabled: true

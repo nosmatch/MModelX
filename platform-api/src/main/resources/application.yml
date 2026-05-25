@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
   servlet:
     context-path: /
   compression:
@@ -9,13 +9,14 @@ server:
 spring:
   application:
     name: mmodelx
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
 
-  # 数据源配置
   datasource:
     driver-class-name: org.postgresql.Driver
-    url: jdbc:postgresql://localhost:5432/mmodelx
-    username: mmodelx
-    password: mmodelx123
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/mmodelx}
+    username: ${DB_USERNAME:mmodelx}
+    password: ${DB_PASSWORD:mmodelx123}
     hikari:
       minimum-idle: 5
       maximum-pool-size: 20
@@ -24,13 +25,12 @@ spring:
       connection-timeout: 30000
       connection-test-query: SELECT 1
 
-  # Redis配置
   data:
     redis:
-      host: localhost
-      port: 6379
-      password:
-      database: 0
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DB:0}
       timeout: 3000
       lettuce:
         pool:
@@ -39,17 +39,15 @@ spring:
           max-idle: 8
           min-idle: 0
 
-  # JPA配置
   jpa:
     hibernate:
-      ddl-auto: none  # 不让Hibernate管理Schema，完全由Flyway管理
+      ddl-auto: none
     show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
-  # Flyway配置
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -58,24 +56,21 @@ spring:
     encoding: UTF-8
     out-of-order: true
 
-# MinIO配置
 minio:
-  endpoint: http://localhost:9002
-  access-key: minioadmin
-  secret-key: minioadmin
-  bucket-name: mmodelx
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9002}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket-name: ${MINIO_BUCKET:mmodelx}
   secure: false
 
-# MLflow配置
 mlflow:
-  tracking-uri: http://localhost:5000
-  registry-uri: http://localhost:5000
-  s3-endpoint-url: http://localhost:9002
-  access-key-id: minioadmin
-  secret-access-key: minioadmin
-  bucket-name: mlflow
+  tracking-uri: ${MLFLOW_TRACKING_URI:http://localhost:5000}
+  registry-uri: ${MLFLOW_REGISTRY_URI:http://localhost:5000}
+  s3-endpoint-url: ${MLFLOW_S3_ENDPOINT:http://localhost:9002}
+  access-key-id: ${MLFLOW_ACCESS_KEY:minioadmin}
+  secret-access-key: ${MLFLOW_SECRET_KEY:minioadmin}
+  bucket-name: ${MLFLOW_BUCKET:mlflow}
 
-# Actuator配置
 management:
   endpoints:
     web:
@@ -92,7 +87,6 @@ management:
     tags:
       application: ${spring.application.name}
 
-# 日志配置
 logging:
   level:
     root: INFO
@@ -108,20 +102,17 @@ logging:
     max-size: 100MB
     max-history: 30
 
-# K8s 配置
 k8s:
-  enabled: true
-  kubeconfig-path: /tmp/kind-mmodelx-kubeconfig.yaml
+  enabled: ${K8S_ENABLED:true}
+  kubeconfig-path: ${K8S_KUBECONFIG_PATH:/tmp/kind-mmodelx-kubeconfig.yaml}
   master-url: ${K8S_MASTER_URL:}
   token: ${K8S_TOKEN:}
   verify-ssl: false
 
-# 推理服务镜像配置
 inference:
-  image: mmodelx-inference:latest
-  port: 8080
+  image: ${INFERENCE_IMAGE:mmodelx-inference:latest}
+  port: ${INFERENCE_PORT:8080}
 
-# JWT配置
 jwt:
-  secret: mmodelx-secret-key-for-jwt-token-generation-must-be-long-enough-for-hs512-algorithm
-  expiration: 86400000  # 24小时 (毫秒)
+  secret: ${JWT_SECRET:mmodelx-secret-key-for-jwt-token-generation-must-be-long-enough-for-hs512-algorithm}
+  expiration: ${JWT_EXPIRATION:86400000}
