@@ -1,0 +1,5 @@
+FROM python:3.11-slim
+RUN pip install --no-cache-dir lightgbm xgboost pandas numpy scikit-learn minio -i https://mirrors.aliyun.com/pypi/simple/
+WORKDIR /app
+COPY train_model.py /app/train_model.py
+ENTRYPOINT ["python3", "/app/train_model.py"]
