@@ -426,9 +426,14 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="预计删除">
+        <el-form-item label="预计影响" v-if="cleanupForm.scope === 'expired'">
           <el-tag type="danger" size="large">
-            {{ cleanupForm.estimatedKeys }} 个Redis Key
+            {{ expiringSoonCount }} 个即将过期的 Key
+          </el-tag>
+        </el-form-item>
+        <el-form-item label="预计影响" v-else-if="cleanupForm.scope === 'all'">
+          <el-tag type="danger" size="large">
+            {{ cleanupForm.featureViewName || '全部' }} 视图的特征
           </el-tag>
         </el-form-item>
 
@@ -530,7 +535,7 @@ import {
 import { useFeaturesStore } from '@/stores/features'
 import { DataSourceTypeLabels } from '@/constants/features'
 import { formatDate as formatDateTime } from '@/utils/date'
-import { previewFeatures, getRedisStatus, searchRedisKeys as apiSearchRedisKeys, getMaterializeHistory } from '@/api/modules/features'
+import { previewFeatures, getRedisStatus, searchRedisKeys as apiSearchRedisKeys, getMaterializeHistory, getExpiringCount, cleanupFeatures } from '@/api/modules/features'
 
 // ==================== Store ====================
 const featuresStore = useFeaturesStore()
@@ -686,6 +691,16 @@ const loadRedisStatus = async () => {
       } else {
         keyDistribution.value = []
       }
+
+      // 获取即将过期的key数量
+      try {
+        const expiringResponse = await getExpiringCount()
+        if (expiringResponse.code === '200' && expiringResponse.data) {
+          expiringSoonCount.value = expiringResponse.data.count || 0
+        }
+      } catch (e) {
+        console.error('获取即将过期数量失败:', e)
+      }
     }
   } catch (error) {
     console.error('加载Redis状态失败:', error)
@@ -801,7 +816,10 @@ const handleMaterialize = async () => {
 
   try {
     // 调用物化 API
-    await featuresStore.materializeFeatures(materializeForm.value.featureViewName)
+    await featuresStore.materializeFeatures(
+      materializeForm.value.featureViewName,
+      materializeForm.value.partitionDate
+    )
 
     // API 返回成功 → 完成物化
     clearProgressTimer()
@@ -873,7 +891,7 @@ const handlePreview = async () => {
     }
 
     ElMessage.info('正在加载预览数据...')
-    const response = await previewFeatures(viewName, 10)
+    const response = await previewFeatures(viewName, 10, materializeForm.value.partitionDate)
 
     if (response.code === '200') {
       previewData.value = {
@@ -944,7 +962,7 @@ const showCleanDialog = () => {
 const handleCleanup = async () => {
   try {
     await ElMessageBox.confirm(
-      `确定要删除 ${cleanupForm.value.estimatedKeys} 个Redis Key吗？此操作不可撤销！`,
+      `确定要清理特征吗？此操作不可撤销！`,
       '确认清理',
       {
         confirmButtonText: '确定',
@@ -955,12 +973,19 @@ const handleCleanup = async () => {
 
     cleaning.value = true
 
-    // 调用清理API
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    const scope = cleanupForm.value.scope
+    const featureViewName = cleanupForm.value.scope === 'all' ? cleanupForm.value.featureViewName : undefined
 
-    ElMessage.success('清理完成')
-    showCleanupDialog.value = false
-    refreshStats()
+    const response = await cleanupFeatures({ scope, featureViewName })
+
+    if (response.code === '200') {
+      const data = response.data || {}
+      ElMessage.success(
+        `清理完成：扫描 ${data.scannedCount || 0} 个 key，删除 ${data.deletedCount || 0} 个`
+      )
+      showCleanupDialog.value = false
+      await refreshStats()
+    }
   } catch (error) {
     if (error === 'cancel') return
     // 错误已由 request.js 拦截器统一提示

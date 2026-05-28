@@ -76,14 +76,16 @@ export const FeatureViewStatusColors = Object.freeze({
 })
 
 /**
- * 特征视图状态选项
+ * 特征视图状态选项（排除 ARCHIVED，后端 list 接口不返回已归档视图）
  */
 export const FeatureViewStatusOptions = Object.freeze(
-  Object.entries(FeatureViewStatusLabels).map(([value, label]) => ({
-    value,
-    label,
-    color: FeatureViewStatusColors[value]
-  }))
+  Object.entries(FeatureViewStatusLabels)
+    .filter(([value]) => value !== FeatureViewStatus.ARCHIVED)
+    .map(([value, label]) => ({
+      value,
+      label,
+      color: FeatureViewStatusColors[value]
+    }))
 )
 
 // ==================== 特征数据类型 ====================

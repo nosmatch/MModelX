@@ -17,6 +17,11 @@ public class TrainingConfig {
     private String experimentName;
 
     /**
+     * 数据集名称
+     */
+    private String datasetName;
+
+    /**
      * 数据集版本
      */
     private String datasetVersion;
@@ -73,5 +78,19 @@ public class TrainingConfig {
         private String metric = "auc";
         private String direction = "maximize";
         private int timeout = 3600; // 秒
+        private List<ParamRange> paramRanges;
+    }
+
+    /**
+     * 参数范围定义（用于超参数调优）
+     */
+    @Data
+    public static class ParamRange {
+        private String name;
+        private String type; // int, float, categorical
+        private Double min;
+        private Double max;
+        private List<String> choices;
+        private Boolean enabled = true;
     }
 }

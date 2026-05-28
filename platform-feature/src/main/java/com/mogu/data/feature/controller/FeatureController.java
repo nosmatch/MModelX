@@ -89,8 +89,9 @@ public class FeatureController {
     @PostMapping("/compute")
     public Result<Void> computeFeatures(@RequestBody FeatureDefinition definition,
                                         @RequestParam(required = false) String inputPath,
-                                        @RequestParam(required = false) String outputPath) {
-        featureComputeService.computeFeatures(definition, inputPath, outputPath);
+                                        @RequestParam(required = false) String outputPath,
+                                        @RequestParam(required = false) String partitionDate) {
+        featureComputeService.computeFeatures(definition, inputPath, outputPath, partitionDate);
         return Result.success();
     }
 
@@ -141,8 +142,9 @@ public class FeatureController {
      * 物化特征到Redis
      */
     @PostMapping("/materialize/{featureViewName}")
-    public Result<Void> materializeFeatures(@PathVariable String featureViewName) {
-        featureComputeService.materializeFeatures(featureViewName);
+    public Result<Void> materializeFeatures(@PathVariable String featureViewName,
+                                            @RequestParam(required = false) String partitionDate) {
+        featureComputeService.materializeFeatures(featureViewName, partitionDate);
         return Result.success();
     }
 
@@ -152,8 +154,9 @@ public class FeatureController {
     @GetMapping("/preview/{featureViewName}")
     public Result<List<Map<String, Object>>> previewFeatures(
             @PathVariable String featureViewName,
-            @RequestParam(defaultValue = "10") int limit) {
-        List<Map<String, Object>> preview = featureComputeService.previewFeatures(featureViewName, limit);
+            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(required = false) String partitionDate) {
+        List<Map<String, Object>> preview = featureComputeService.previewFeatures(featureViewName, limit, partitionDate);
         return Result.success(preview);
     }
 
@@ -206,5 +209,29 @@ public class FeatureController {
         List<com.mogu.data.common.entity.MaterializationHistory> history =
                 featureComputeService.getMaterializeHistory(featureViewName);
         return Result.success(history);
+    }
+
+    /**
+     * 获取即将过期的特征数量
+     */
+    @GetMapping("/redis/expiring-count")
+    public Result<Map<String, Object>> getExpiringCount(
+            @RequestParam(defaultValue = "86400") long thresholdSeconds) {
+        long count = featureComputeService.getExpiringSoonCount(thresholdSeconds);
+        Map<String, Object> result = new HashMap<>();
+        result.put("count", count);
+        result.put("thresholdSeconds", thresholdSeconds);
+        return Result.success(result);
+    }
+
+    /**
+     * 清理过期/特征 Redis key
+     */
+    @PostMapping("/redis/cleanup")
+    public Result<Map<String, Object>> cleanupFeatures(
+            @RequestParam(defaultValue = "expired") String scope,
+            @RequestParam(required = false) String featureViewName) {
+        Map<String, Object> result = featureComputeService.cleanupExpiredFeatures(scope, featureViewName);
+        return Result.success(result);
     }
 }

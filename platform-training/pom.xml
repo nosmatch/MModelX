@@ -29,6 +29,12 @@
             <artifactId>platform-sample</artifactId>
         </dependency>
 
+        <!-- Platform Deployment (K8s client) -->
+        <dependency>
+            <groupId>com.mogu.data</groupId>
+            <artifactId>platform-deployment</artifactId>
+        </dependency>
+
         <!-- Spring Boot Starters -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

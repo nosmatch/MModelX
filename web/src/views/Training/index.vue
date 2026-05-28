@@ -139,11 +139,14 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="120" fixed="right" align="center">
+      <el-table-column label="操作" width="150" fixed="right" align="center">
         <template #default="{ row }">
           <div class="action-buttons">
             <el-tooltip content="查看详情" placement="top">
               <el-button size="small" :icon="View" circle @click.stop="handleViewJob(row)" />
+            </el-tooltip>
+            <el-tooltip content="查看日志" placement="top">
+              <el-button size="small" type="info" :icon="Document" circle @click.stop="handleViewLogs(row)" />
             </el-tooltip>
             <el-tooltip
               v-if="row.status === 'RUNNING' || row.status === 'PENDING'"
@@ -151,6 +154,16 @@
               placement="top"
             >
               <el-button size="small" type="primary" :icon="Refresh" circle @click.stop="handleRefreshJob(row)" />
+            </el-tooltip>
+            <el-tooltip
+              v-if="row.status === 'SUCCESS' || row.status === 'FAILED'"
+              content="重新训练"
+              placement="top"
+            >
+              <el-button size="small" type="warning" :icon="RefreshRight" circle @click.stop="handleRetryJob(row)" />
+            </el-tooltip>
+            <el-tooltip content="删除任务" placement="top">
+              <el-button size="small" type="danger" :icon="Delete" circle @click.stop="handleDeleteJob(row)" />
             </el-tooltip>
           </div>
         </template>
@@ -183,8 +196,8 @@
           <el-descriptions-item label="创建时间">{{ formatDate(selectedJob.createdAt) }}</el-descriptions-item>
         </el-descriptions>
 
-        <el-divider v-if="selectedJob.metrics" content-position="left">评估指标</el-divider>
-        <div v-if="selectedJob.metrics" class="metrics-section">
+        <el-divider content-position="left">评估指标</el-divider>
+        <div v-if="selectedJob.metrics && Object.keys(selectedJob.metrics).length > 0" class="metrics-section">
           <el-tag
             v-for="(value, key) in selectedJob.metrics"
             :key="key"
@@ -194,15 +207,41 @@
             {{ key }}: {{ typeof value === 'number' ? value.toFixed(4) : value }}
           </el-tag>
         </div>
-
-        <el-divider v-if="selectedJob.errorMessage" content-position="left">错误信息</el-divider>
         <el-alert
-          v-if="selectedJob.errorMessage"
-          :title="selectedJob.errorMessage"
-          type="error"
+          v-else
+          title="暂无评估指标"
+          description="训练可能未完成或指标未正确保存，可点击「查看日志」排查原因"
+          type="info"
           :closable="false"
+          show-icon
         />
+
+        <template v-if="selectedJob.errorMessage">
+          <el-divider content-position="left">错误信息</el-divider>
+          <el-alert
+            :title="selectedJob.errorMessage"
+            type="error"
+            :closable="false"
+          />
+        </template>
       </div>
+    </el-dialog>
+
+    <!-- 日志对话框 -->
+    <el-dialog
+      v-model="showJobLogs"
+      title="训练日志"
+      width="800px"
+    >
+      <el-skeleton v-if="logsLoading" :rows="10" animated />
+      <el-input
+        v-else
+        v-model="jobLogsContent"
+        type="textarea"
+        :rows="20"
+        readonly
+        style="font-family: monospace; font-size: 12px"
+      />
     </el-dialog>
 
     <!-- 训练配置对话框 -->
@@ -210,7 +249,8 @@
       v-if="showConfigDialog"
       :visible="showConfigDialog"
       :mode="dialogMode"
-      @close="showConfigDialog = false"
+      :initial-config="prefillConfig"
+      @close="handleDialogClose"
       @submit="handleTrainingSubmit"
     />
   </div>
@@ -219,10 +259,10 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   List, VideoPlay, CircleCheck, CircleClose,
-  Search, Refresh, Plus, View, Cpu, Loading
+  Search, Refresh, Plus, View, Cpu, Loading, RefreshRight, Delete, Document
 } from '@element-plus/icons-vue'
 import { useTrainingStore } from '@/stores/training'
 import { formatDate, formatElapsed as formatElapsedTime } from '@/utils/date'
@@ -243,6 +283,12 @@ const showConfigDialog = ref(false)
 const dialogMode = ref('create')
 const showJobDetail = ref(false)
 const selectedJob = ref(null)
+const prefillConfig = ref(null)
+
+// 日志对话框
+const showJobLogs = ref(false)
+const jobLogsContent = ref('')
+const logsLoading = ref(false)
 
 // 自动刷新定时器
 let autoRefreshTimer = null
@@ -292,8 +338,7 @@ const handleNewTraining = () => {
 }
 
 const handleHyperTune = () => {
-  dialogMode.value = 'tune'
-  showConfigDialog.value = true
+  router.push('/training/tuning')
 }
 
 const handleViewExperiments = () => {
@@ -305,6 +350,20 @@ const handleViewJob = (row) => {
   showJobDetail.value = true
 }
 
+const handleViewLogs = async (row) => {
+  showJobLogs.value = true
+  logsLoading.value = true
+  jobLogsContent.value = ''
+  try {
+    const logs = await trainingStore.fetchJobLogs(row.id)
+    jobLogsContent.value = logs
+  } catch (error) {
+    jobLogsContent.value = '获取日志失败'
+  } finally {
+    logsLoading.value = false
+  }
+}
+
 const handleRefreshJob = async (row) => {
   try {
     await trainingStore.fetchJobStatus(row.id)
@@ -312,6 +371,67 @@ const handleRefreshJob = async (row) => {
   } catch (error) {
     // 错误已由 request.js 拦截器统一提示
   }
+}
+
+const handleDialogClose = () => {
+  showConfigDialog.value = false
+  prefillConfig.value = null
+}
+
+const handleDeleteJob = async (row) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除训练任务 "${row.jobName}" 吗？`,
+      '删除确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    await trainingStore.deleteJob(row.id)
+    ElMessage.success('删除成功')
+    await loadJobs()
+  } catch (error) {
+    if (error !== 'cancel') {
+      // 错误已由 request.js 拦截器统一提示
+    }
+  }
+}
+
+const handleRetryJob = async (row) => {
+  // 如果任务有数据集信息，直接走重新训练 API
+  if (row.datasetName) {
+    try {
+      const newJobId = await trainingStore.retryJob(row.id)
+      ElMessage.success(`重新训练任务已提交, 新任务ID: ${newJobId}`)
+
+      // 开始轮询新任务
+      trainingStore.startJobPolling(newJobId, (job) => {
+        console.log('Retry job update:', job.status, job.progress)
+      }, (job) => {
+        if (job.status === 'SUCCESS') {
+          ElMessage.success(`重新训练完成: ${job.jobName}`)
+        } else {
+          ElMessage.error(`重新训练失败: ${job.jobName}`)
+        }
+      })
+    } catch (error) {
+      // 错误已由 request.js 拦截器统一提示
+    }
+    return
+  }
+
+  // 缺少数据集信息时，打开配置对话框预填充其他配置
+  prefillConfig.value = {
+    experimentName: row.experimentName ? row.experimentName + '_retry' : '',
+    datasetName: '',
+    datasetVersion: row.datasetVersion || '',
+    modelType: row.modelType || 'lightgbm',
+    params: row.hyperparameters || {}
+  }
+  dialogMode.value = 'retry'
+  showConfigDialog.value = true
 }
 
 const handleTrainingSubmit = async (config, isAsync) => {
@@ -347,13 +467,18 @@ const handleTrainingSubmit = async (config, isAsync) => {
 const getStatusType = (status) => JobStatusColors[status] || 'info'
 const getStatusLabel = (status) => JobStatusLabels[status] || status
 
+// 计算是否有运行中的任务（用于自动刷新）
+const hasRunningJobs = computed(() => {
+  return trainingStore.jobs.some(j => j.status === 'RUNNING' || j.status === 'PENDING')
+})
+
 // 生命周期
 onMounted(() => {
   loadJobs()
 
-  // 每10秒自动刷新
+  // 每10秒自动刷新（只要有运行中的任务就刷新）
   autoRefreshTimer = setInterval(() => {
-    if (trainingStore.runningJobs.length > 0) {
+    if (hasRunningJobs.value) {
       loadJobs()
     }
   }, 10000)

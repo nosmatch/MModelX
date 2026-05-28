@@ -66,15 +66,50 @@ export function listRunningJobs() {
 }
 
 /**
- * 超参数调优
+ * 提交超参数调优任务
  * @param {Object} config - 训练配置
- * @returns {Promise<{code: string, message: string, data: Object}>}
+ * @returns {Promise<{code: string, message: string, data: number}>}
  */
-export function hyperparameterTuning(config) {
+export function submitTuningJob(config) {
   return request({
-    url: '/training/tune',
+    url: '/training/tune-jobs',
     method: 'post',
     data: config
+  })
+}
+
+/**
+ * 获取调优任务状态
+ * @param {number} id - 调优任务ID
+ * @returns {Promise<{code: string, message: string, data: Object}>}
+ */
+export function getTuningJob(id) {
+  return request({
+    url: `/training/tune-jobs/${id}`,
+    method: 'get'
+  })
+}
+
+/**
+ * 获取调优任务 trial 列表
+ * @param {number} id - 调优任务ID
+ * @returns {Promise<{code: string, message: string, data: Array}>}
+ */
+export function getTuningTrials(id) {
+  return request({
+    url: `/training/tune-jobs/${id}/trials`,
+    method: 'get'
+  })
+}
+
+/**
+ * 列出所有调优任务
+ * @returns {Promise<{code: string, message: string, data: Array}>}
+ */
+export function listTuningJobs() {
+  return request({
+    url: '/training/tune-jobs',
+    method: 'get'
   })
 }
 
@@ -111,6 +146,18 @@ export function listExperiments() {
   return request({
     url: '/training/experiments',
     method: 'get'
+  })
+}
+
+/**
+ * 删除实验
+ * @param {string} name - 实验名称
+ * @returns {Promise<{code: string, message: string}>}
+ */
+export function deleteExperiment(name) {
+  return request({
+    url: `/training/experiments/${encodeURIComponent(name)}`,
+    method: 'delete'
   })
 }
 
@@ -165,18 +212,75 @@ export function listModels() {
   })
 }
 
+/**
+ * 删除模型（包括 MinIO 文件）
+ * @param {string} name - 模型名称
+ * @param {string} version - 模型版本
+ * @returns {Promise<{code: string, message: string}>}
+ */
+export function deleteModel(name, version) {
+  return request({
+    url: `/training/models/${encodeURIComponent(name)}/${encodeURIComponent(version)}`,
+    method: 'delete'
+  })
+}
+
+/**
+ * 获取训练任务日志
+ * @param {number} id - 任务ID
+ * @returns {Promise<{code: string, message: string, data: string}>}
+ */
+export function getJobLogs(id) {
+  return request({
+    url: `/training/jobs/${id}/logs`,
+    method: 'get'
+  })
+}
+
+/**
+ * 重新训练（基于已有任务的配置）
+ * @param {number} id - 原任务ID
+ * @returns {Promise<{code: string, message: string, data: number}>}
+ */
+export function retryTrainingJob(id) {
+  return request({
+    url: `/training/jobs/${id}/retry`,
+    method: 'post'
+  })
+}
+
+/**
+ * 删除训练任务
+ * @param {number} id - 任务ID
+ * @returns {Promise<{code: string, message: string}>}
+ */
+export function deleteTrainingJob(id) {
+  return request({
+    url: `/training/jobs/${id}`,
+    method: 'delete'
+  })
+}
+
 export default {
   trainSync,
   submitTrainingJob,
+  retryTrainingJob,
+  deleteTrainingJob,
   getJobStatus,
+  getJobLogs,
   listTrainingJobs,
   listRunningJobs,
-  hyperparameterTuning,
+  submitTuningJob,
+  getTuningJob,
+  getTuningTrials,
+  listTuningJobs,
   createExperiment,
   getExperiment,
   listExperiments,
+  deleteExperiment,
   registerModel,
   transitionModelStage,
   getProductionModel,
-  listModels
+  listModels,
+  deleteModel
 }

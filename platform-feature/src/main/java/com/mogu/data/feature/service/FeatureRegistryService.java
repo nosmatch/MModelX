@@ -234,8 +234,8 @@ public class FeatureRegistryService {
      * @param featureViewName 特征视图名称
      */
     public void deleteFeatureView(String featureViewName) {
-        FeatureView featureView = featureViewRepository.findByName(featureViewName)
-            .orElseThrow(() -> new BusinessException("特征视图不存在: " + featureViewName));
+        FeatureView featureView = featureViewRepository.findActiveByName(featureViewName)
+            .orElseThrow(() -> new BusinessException("特征视图不存在或已归档: " + featureViewName));
 
         // 软删除：设置为归档状态
         featureView.setStatus(FeatureView.FeatureViewStatus.ARCHIVED);

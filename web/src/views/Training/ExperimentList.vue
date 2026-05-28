@@ -114,11 +114,14 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="120" fixed="right" align="center">
+      <el-table-column label="操作" width="150" fixed="right" align="center">
         <template #default="{ row }">
           <div class="action-buttons">
             <el-tooltip content="查看详情" placement="top">
               <el-button size="small" :icon="View" circle @click.stop="handleView(row)" />
+            </el-tooltip>
+            <el-tooltip content="删除实验" placement="top">
+              <el-button size="small" type="danger" :icon="Delete" circle @click.stop="handleDelete(row)" />
             </el-tooltip>
           </div>
         </template>
@@ -199,9 +202,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Search, Refresh, Plus, View, Collection
+  Search, Refresh, Plus, View, Collection, Delete
 } from '@element-plus/icons-vue'
 import { useTrainingStore } from '@/stores/training'
 import { formatDate } from '@/utils/date'
@@ -262,6 +265,27 @@ const handleRefresh = () => {
 const handleView = (row) => {
   selectedExperiment.value = row
   showDetail.value = true
+}
+
+const handleDelete = async (row) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除实验 "${row.name}" 吗？`,
+      '删除确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    await trainingStore.deleteExperiment(row.name)
+    ElMessage.success('删除成功')
+    await loadExperiments()
+  } catch (error) {
+    if (error !== 'cancel') {
+      // 错误已由 request.js 拦截器统一提示
+    }
+  }
 }
 
 const handleCreate = () => {

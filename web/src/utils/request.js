@@ -10,9 +10,60 @@ const request = axios.create({
   }
 })
 
+// 开发环境 token 获取状态（防止重复请求）
+let devTokenPromise = null
+
+/**
+ * 获取开发环境测试 token
+ * 仅在 Vite dev 模式下且 localStorage 中没有 token 时调用
+ */
+async function ensureDevToken() {
+  const token = localStorage.getItem('token')
+  if (token) {
+    return token
+  }
+
+  // 非开发环境直接返回 null
+  if (!import.meta.env.DEV) {
+    return null
+  }
+
+  // 防止并发重复请求
+  if (devTokenPromise) {
+    return devTokenPromise
+  }
+
+  devTokenPromise = fetch('/api/v1/auth/dev-token')
+    .then((res) => res.json())
+    .then((res) => {
+      if (res.code === '200' || res.code === 200) {
+        const token = res.data?.token
+        if (token) {
+          localStorage.setItem('token', token)
+          console.log('[DevAuth] 自动获取测试 token 成功')
+          return token
+        }
+      }
+      console.warn('[DevAuth] 获取测试 token 失败:', res.message)
+      return null
+    })
+    .catch((err) => {
+      console.warn('[DevAuth] 获取测试 token 请求失败:', err)
+      return null
+    })
+    .finally(() => {
+      devTokenPromise = null
+    })
+
+  return devTokenPromise
+}
+
 // 请求拦截器
 request.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    // 开发环境：自动获取测试 token
+    await ensureDevToken()
+
     // 从localStorage获取token
     const token = localStorage.getItem('token')
     if (token) {

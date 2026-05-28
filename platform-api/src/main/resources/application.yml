@@ -113,6 +113,20 @@ inference:
   image: ${INFERENCE_IMAGE:mmodelx-inference:latest}
   port: ${INFERENCE_PORT:8080}
 
+training:
+  k8s:
+    enabled: ${TRAINING_K8S_ENABLED:true}
+    namespace: ${TRAINING_K8S_NAMESPACE:mmodelx-training}
+    image: ${TRAINING_IMAGE:mmodelx/trainer:latest}
+    minio-endpoint: ${TRAINING_K8S_MINIO_ENDPOINT:http://host.docker.internal:9002}
+    cpu-request: ${TRAINING_CPU_REQUEST:1}
+    memory-request: ${TRAINING_MEMORY_REQUEST:2Gi}
+    cpu-limit: ${TRAINING_CPU_LIMIT:2}
+    memory-limit: ${TRAINING_MEMORY_LIMIT:4Gi}
+    active-deadline-seconds: ${TRAINING_DEADLINE_SECONDS:3600}
+  local:
+    enabled: ${TRAINING_LOCAL_ENABLED:true}
+
 jwt:
   secret: ${JWT_SECRET:mmodelx-secret-key-for-jwt-token-generation-must-be-long-enough-for-hs512-algorithm}
   expiration: ${JWT_EXPIRATION:86400000}

@@ -19,7 +19,7 @@
             <!-- 数据集选择 -->
             <el-form-item label="数据集" required>
               <el-select
-                v-model="selectedDataset"
+                v-model="tuneForm.datasetName"
                 placeholder="选择数据集"
                 clearable
                 style="width: 100%; margin-bottom: 8px"
@@ -56,7 +56,7 @@
 
             <!-- 模型类型 -->
             <el-form-item label="模型类型">
-              <el-radio-group v-model="tuneForm.modelType">
+              <el-radio-group v-model="tuneForm.modelType" @change="handleModelTypeChange">
                 <el-radio-button label="lightgbm">LightGBM</el-radio-button>
                 <el-radio-button label="xgboost">XGBoost</el-radio-button>
               </el-radio-group>
@@ -82,99 +82,126 @@
               </el-radio-group>
             </el-form-item>
 
-            <el-divider content-position="left">参数搜索空间</el-divider>
+            <el-divider content-position="left">参数配置</el-divider>
 
-            <!-- LightGBM 参数空间 -->
-            <template v-if="tuneForm.modelType === 'lightgbm'">
-              <el-form-item label="num_leaves">
-                <el-row :gutter="8">
-                  <el-col :span="11">
-                    <el-input-number v-model="tuneForm.searchSpace.num_leaves.min" :min="2" :max="256" placeholder="最小" />
-                  </el-col>
-                  <el-col :span="2" class="range-separator">~</el-col>
-                  <el-col :span="11">
-                    <el-input-number v-model="tuneForm.searchSpace.num_leaves.max" :min="2" :max="256" placeholder="最大" />
-                  </el-col>
-                </el-row>
-              </el-form-item>
-
-              <el-form-item label="learning_rate">
-                <el-row :gutter="8">
-                  <el-col :span="11">
-                    <el-input-number v-model="tuneForm.searchSpace.learning_rate.min" :min="0.001" :max="1" :step="0.001" placeholder="最小" />
-                  </el-col>
-                  <el-col :span="2" class="range-separator">~</el-col>
-                  <el-col :span="11">
-                    <el-input-number v-model="tuneForm.searchSpace.learning_rate.max" :min="0.001" :max="1" :step="0.001" placeholder="最大" />
-                  </el-col>
-                </el-row>
-              </el-form-item>
-
-              <el-form-item label="feature_fraction">
-                <el-row :gutter="8">
-                  <el-col :span="11">
-                    <el-input-number v-model="tuneForm.searchSpace.feature_fraction.min" :min="0.1" :max="1" :step="0.05" placeholder="最小" />
-                  </el-col>
-                  <el-col :span="2" class="range-separator">~</el-col>
-                  <el-col :span="11">
-                    <el-input-number v-model="tuneForm.searchSpace.feature_fraction.max" :min="0.1" :max="1" :step="0.05" placeholder="最大" />
-                  </el-col>
-                </el-row>
-              </el-form-item>
-            </template>
-
-            <!-- XGBoost 参数空间 -->
-            <template v-else>
-              <el-form-item label="max_depth">
-                <el-row :gutter="8">
-                  <el-col :span="11">
-                    <el-input-number v-model="tuneForm.searchSpace.max_depth.min" :min="1" :max="20" placeholder="最小" />
-                  </el-col>
-                  <el-col :span="2" class="range-separator">~</el-col>
-                  <el-col :span="11">
-                    <el-input-number v-model="tuneForm.searchSpace.max_depth.max" :min="1" :max="20" placeholder="最大" />
-                  </el-col>
-                </el-row>
-              </el-form-item>
-
-              <el-form-item label="learning_rate">
-                <el-row :gutter="8">
-                  <el-col :span="11">
-                    <el-input-number v-model="tuneForm.searchSpace.learning_rate.min" :min="0.001" :max="1" :step="0.001" placeholder="最小" />
-                  </el-col>
-                  <el-col :span="2" class="range-separator">~</el-col>
-                  <el-col :span="11">
-                    <el-input-number v-model="tuneForm.searchSpace.learning_rate.max" :min="0.001" :max="1" :step="0.001" placeholder="最大" />
-                  </el-col>
-                </el-row>
-              </el-form-item>
-
-              <el-form-item label="subsample">
-                <el-row :gutter="8">
-                  <el-col :span="11">
-                    <el-input-number v-model="tuneForm.searchSpace.subsample.min" :min="0.1" :max="1" :step="0.05" placeholder="最小" />
-                  </el-col>
-                  <el-col :span="2" class="range-separator">~</el-col>
-                  <el-col :span="11">
-                    <el-input-number v-model="tuneForm.searchSpace.subsample.max" :min="0.1" :max="1" :step="0.05" placeholder="最大" />
-                  </el-col>
-                </el-row>
-              </el-form-item>
-            </template>
+            <!-- 参数范围列表 -->
+            <div class="param-ranges">
+              <div
+                v-for="(param, index) in tuneForm.paramRanges"
+                :key="index"
+                class="param-range-item"
+              >
+                <el-switch
+                  v-model="param.enabled"
+                  size="small"
+                  style="margin-right: 8px"
+                />
+                <el-input
+                  v-model="param.name"
+                  placeholder="参数名"
+                  size="small"
+                  style="width: 140px; margin-right: 8px"
+                  :disabled="!param.enabled"
+                />
+                <el-select
+                  v-model="param.type"
+                  placeholder="类型"
+                  size="small"
+                  style="width: 90px; margin-right: 8px"
+                  :disabled="!param.enabled"
+                >
+                  <el-option label="整数" value="int" />
+                  <el-option label="浮点" value="float" />
+                  <el-option label="枚举" value="categorical" />
+                </el-select>
+                <template v-if="param.type === 'categorical'">
+                  <el-input
+                    v-model="param.choicesStr"
+                    placeholder="选项,逗号分隔"
+                    size="small"
+                    style="width: 160px; margin-right: 8px"
+                    :disabled="!param.enabled"
+                  />
+                </template>
+                <template v-else>
+                  <el-input-number
+                    v-model="param.min"
+                    placeholder="最小"
+                    size="small"
+                    :step="param.type === 'int' ? 1 : 0.01"
+                    style="width: 100px; margin-right: 8px"
+                    :disabled="!param.enabled"
+                  />
+                  <span class="range-separator">~</span>
+                  <el-input-number
+                    v-model="param.max"
+                    placeholder="最大"
+                    size="small"
+                    :step="param.type === 'int' ? 1 : 0.01"
+                    style="width: 100px; margin-left: 8px; margin-right: 8px"
+                    :disabled="!param.enabled"
+                  />
+                </template>
+                <el-button
+                  size="small"
+                  type="danger"
+                  :icon="Delete"
+                  circle
+                  @click="removeParamRange(index)"
+                />
+              </div>
+              <el-button
+                size="small"
+                type="primary"
+                :icon="Plus"
+                @click="addParamRange"
+                style="margin-top: 8px"
+              >
+                添加参数
+              </el-button>
+            </div>
 
             <el-form-item>
               <el-button
                 type="primary"
                 size="large"
                 :icon="Search"
-                :loading="trainingStore.loading.tuning"
+                :loading="trainingStore.loading.tuning || isTuningRunning"
                 @click="handleStartTuning"
               >
-                开始调优
+                {{ isTuningRunning ? '调优中...' : '开始调优' }}
               </el-button>
               <el-button size="large" @click="handleReset">重置</el-button>
             </el-form-item>
           </el-form>
+        </el-card>
+
+        <!-- 历史调优任务 -->
+        <el-card class="history-card" shadow="never" style="margin-top: 16px">
+          <template #header>
+            <div class="card-header">
+              <span>历史调优任务</span>
+              <el-button size="small" :icon="Refresh" @click="loadTuningHistory">刷新</el-button>
+            </div>
+          </template>
+          <el-table :data="tuningHistory" size="small" style="width: 100%">
+            <el-table-column prop="experimentName" label="实验名称" show-overflow-tooltip />
+            <el-table-column prop="status" label="状态" width="80">
+              <template #default="{ row }">
+                <el-tag :type="getStatusType(row.status)" size="small">{{ row.status }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="currentTrial" label="进度" width="100">
+              <template #default="{ row }">
+                <span>{{ row.currentTrial || 0 }}/{{ row.nTrials }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="80" align="center">
+              <template #default="{ row }">
+                <el-button size="small" :icon="View" circle @click="selectHistoryJob(row)" />
+              </template>
+            </el-table-column>
+          </el-table>
         </el-card>
       </el-col>
 
@@ -185,11 +212,13 @@
             <div class="card-header">
               <span>调优结果</span>
               <el-tag v-if="tuneResult" type="success">已完成</el-tag>
+              <el-tag v-else-if="isTuningRunning" type="warning">调优中</el-tag>
               <el-tag v-else type="info">等待开始</el-tag>
             </div>
           </template>
 
-          <div v-if="!tuneResult" class="empty-result">
+          <!-- 空状态 -->
+          <div v-if="!isTuningRunning && !tuneResult" class="empty-result">
             <el-empty description="配置参数后点击开始调优">
               <template #image>
                 <el-icon :size="64" color="#c0c4cc"><Setting /></el-icon>
@@ -197,7 +226,61 @@
             </el-empty>
           </div>
 
-          <div v-else class="tune-result">
+          <!-- 调优中 -->
+          <div v-else-if="isTuningRunning" class="tuning-progress">
+            <div class="progress-header">
+              <el-progress
+                :percentage="Math.round((currentTuningJob.currentTrial / currentTuningJob.nTrials) * 100)"
+                :format="() => currentTuningJob.currentTrial + '/' + currentTuningJob.nTrials"
+                :stroke-width="18"
+                status="active"
+              />
+              <p class="progress-text">
+                正在执行第 {{ currentTuningJob.currentTrial + 1 }} 轮搜索，共 {{ currentTuningJob.nTrials }} 轮
+              </p>
+            </div>
+
+            <el-divider content-position="left">当前最佳</el-divider>
+            <div v-if="currentTuningJob.bestScore" class="current-best">
+              <el-statistic title="最佳得分" :value="currentTuningJob.bestScore" :precision="4" />
+              <div class="best-params-preview">
+                <el-tag
+                  v-for="(value, key) in bestParamsFormatted"
+                  :key="key"
+                  size="small"
+                  type="success"
+                >
+                  {{ key }}: {{ value }}
+                </el-tag>
+              </div>
+            </div>
+            <el-empty v-else description="等待第一轮结果..." :image-size="60" />
+
+            <el-divider content-position="left">Trial 列表</el-divider>
+            <el-table :data="trialList" size="small" max-height="400" v-loading="trialsLoading">
+              <el-table-column prop="trialIndex" label="#" width="50" align="center" />
+              <el-table-column label="参数" min-width="200">
+                <template #default="{ row }">
+                  <span class="param-preview">{{ formatParams(row.params) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="score" label="得分" width="100" align="center">
+                <template #default="{ row }">
+                  <span :class="{ 'best-score': row.isBest }">
+                    {{ row.score != null ? row.score.toFixed(4) : '-' }}
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="status" label="状态" width="80" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="getTrialStatusType(row.status)" size="small">{{ row.status }}</el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <!-- 调优完成 -->
+          <div v-else-if="tuneResult" class="tune-result">
             <!-- 最佳结果卡片 -->
             <el-row :gutter="16" class="result-stats">
               <el-col :span="8">
@@ -216,7 +299,7 @@
               <el-col :span="8">
                 <div class="result-stat">
                   <div class="stat-label">搜索轮数</div>
-                  <div class="stat-value">{{ tuneForm.nTrials }}</div>
+                  <div class="stat-value">{{ tuneResult.nTrials || 20 }}</div>
                 </div>
               </el-col>
             </el-row>
@@ -265,6 +348,55 @@
                 新的调优
               </el-button>
             </div>
+
+            <el-divider content-position="left">调优配置</el-divider>
+            <el-descriptions :column="2" size="small" border>
+              <el-descriptions-item label="实验名称">{{ tuneResult.experimentName }}</el-descriptions-item>
+              <el-descriptions-item label="数据集">{{ tuneResult.datasetName }} @ {{ tuneResult.datasetVersion }}</el-descriptions-item>
+              <el-descriptions-item label="模型类型">{{ tuneResult.modelType }}</el-descriptions-item>
+              <el-descriptions-item label="优化目标">{{ tuneResult.metric }} ({{ tuneResult.direction === 'maximize' ? '最大化' : '最小化' }})</el-descriptions-item>
+            </el-descriptions>
+
+            <el-divider content-position="left">Trial 详情</el-divider>
+            <el-table :data="trialList" size="small" max-height="500" v-loading="trialsLoading">
+              <el-table-column prop="trialIndex" label="#" width="50" align="center" />
+              <el-table-column label="参数" min-width="250">
+                <template #default="{ row }">
+                  <div class="param-detail">
+                    <el-tag
+                      v-for="(value, key) in row.params"
+                      :key="key"
+                      size="small"
+                      class="param-tag-inline"
+                    >
+                      {{ key }}: {{ typeof value === 'number' ? value.toFixed(4) : value }}
+                    </el-tag>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="score" label="得分" width="100" align="center">
+                <template #default="{ row }">
+                  <span :class="{ 'best-score': row.isBest }">
+                    {{ row.score != null ? row.score.toFixed(4) : '-' }}
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column label="指标" min-width="150">
+                <template #default="{ row }">
+                  <span class="param-preview">{{ formatParams(row.metrics) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="status" label="状态" width="80" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="getTrialStatusType(row.status)" size="small">{{ row.status }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="elapsedTimeMs" label="耗时(ms)" width="100" align="center">
+                <template #default="{ row }">
+                  {{ row.elapsedTimeMs != null ? row.elapsedTimeMs : '-' }}
+                </template>
+              </el-table-column>
+            </el-table>
           </div>
         </el-card>
       </el-col>
@@ -273,38 +405,69 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, Setting, Box, Refresh } from '@element-plus/icons-vue'
+import { Search, Setting, Box, Refresh, View, Plus, Delete } from '@element-plus/icons-vue'
 import { useTrainingStore } from '@/stores/training'
 import { listDatasets, listDatasetVersions } from '@/api/modules/samples'
+import { registerModel } from '@/api/modules/training'
 
 const trainingStore = useTrainingStore()
 
 const datasetList = ref([])
 const versionList = ref([])
-const selectedDataset = ref('')
+
+const defaultLightGBMRanges = () => [
+  { name: 'num_leaves', type: 'int', min: 31, max: 127, enabled: true },
+  { name: 'learning_rate', type: 'float', min: 0.01, max: 0.2, enabled: true },
+  { name: 'feature_fraction', type: 'float', min: 0.5, max: 1.0, enabled: true },
+  { name: 'bagging_fraction', type: 'float', min: 0.5, max: 1.0, enabled: true },
+  { name: 'bagging_freq', type: 'int', min: 1, max: 10, enabled: true },
+]
+
+const defaultXGBoostRanges = () => [
+  { name: 'max_depth', type: 'int', min: 3, max: 13, enabled: true },
+  { name: 'learning_rate', type: 'float', min: 0.01, max: 0.2, enabled: true },
+  { name: 'subsample', type: 'float', min: 0.5, max: 1.0, enabled: true },
+  { name: 'colsample_bytree', type: 'float', min: 0.5, max: 1.0, enabled: true },
+]
 
 const defaultForm = () => ({
   experimentName: '',
+  datasetName: '',
   datasetVersion: '',
   modelType: 'lightgbm',
   nTrials: 20,
   metric: 'auc',
   direction: 'maximize',
-  searchSpace: {
-    num_leaves: { min: 20, max: 150 },
-    learning_rate: { min: 0.01, max: 0.3 },
-    feature_fraction: { min: 0.5, max: 1.0 },
-    bagging_fraction: { min: 0.5, max: 1.0 },
-    max_depth: { min: 3, max: 15 },
-    subsample: { min: 0.5, max: 1.0 },
-    colsample_bytree: { min: 0.5, max: 1.0 }
-  }
+  paramRanges: defaultLightGBMRanges(),
 })
 
 const tuneForm = ref(defaultForm())
+
+// 调优状态
+const tuningJobId = ref(null)
+const isTuningRunning = ref(false)
+const currentTuningJob = ref({})
+const trialList = ref([])
+const trialsLoading = ref(false)
 const tuneResult = ref(null)
+const tuningPollTimer = ref(null)
+
+// 历史记录
+const tuningHistory = ref([])
+
+// 最佳参数格式化
+const bestParamsFormatted = computed(() => {
+  if (!currentTuningJob.value.bestParams) return {}
+  try {
+    return typeof currentTuningJob.value.bestParams === 'object'
+      ? currentTuningJob.value.bestParams
+      : JSON.parse(currentTuningJob.value.bestParams)
+  } catch {
+    return {}
+  }
+})
 
 const loadDatasets = async () => {
   try {
@@ -336,16 +499,70 @@ const handleDatasetChange = async (datasetName) => {
   }
 }
 
+const handleModelTypeChange = (type) => {
+  if (type === 'lightgbm') {
+    tuneForm.value.paramRanges = defaultLightGBMRanges()
+  } else if (type === 'xgboost') {
+    tuneForm.value.paramRanges = defaultXGBoostRanges()
+  }
+}
+
+const addParamRange = () => {
+  tuneForm.value.paramRanges.push({
+    name: '',
+    type: 'float',
+    min: 0,
+    max: 1,
+    enabled: true,
+    choicesStr: ''
+  })
+}
+
+const removeParamRange = (index) => {
+  tuneForm.value.paramRanges.splice(index, 1)
+}
+
+const buildParamRanges = () => {
+  return tuneForm.value.paramRanges
+    .filter(p => p.enabled && p.name)
+    .map(p => {
+      const range = {
+        name: p.name,
+        type: p.type,
+        enabled: p.enabled
+      }
+      if (p.type === 'categorical' && p.choicesStr) {
+        range.choices = p.choicesStr.split(',').map(s => s.trim()).filter(s => s)
+      } else {
+        if (p.min !== undefined && p.min !== null) range.min = Number(p.min)
+        if (p.max !== undefined && p.max !== null) range.max = Number(p.max)
+      }
+      return range
+    })
+}
+
 const handleStartTuning = async () => {
-  if (!tuneForm.value.experimentName || !tuneForm.value.datasetVersion) {
-    ElMessage.warning('请填写实验名称和数据集版本')
+  if (!tuneForm.value.experimentName || !tuneForm.value.datasetName || !tuneForm.value.datasetVersion) {
+    ElMessage.warning('请填写实验名称、数据集和数据集版本')
     return
   }
 
+  const paramRanges = buildParamRanges()
+  if (paramRanges.length === 0) {
+    ElMessage.warning('请至少配置一个调优参数')
+    return
+  }
+
+  // 重置状态
+  stopTuningPoll()
+  tuneResult.value = null
+  trialList.value = []
+  currentTuningJob.value = {}
+
   try {
-    // 构建配置
     const config = {
       experimentName: tuneForm.value.experimentName,
+      datasetName: tuneForm.value.datasetName,
       datasetVersion: tuneForm.value.datasetVersion,
       model: {
         type: tuneForm.value.modelType,
@@ -354,37 +571,147 @@ const handleStartTuning = async () => {
       optunaConfig: {
         nTrials: tuneForm.value.nTrials,
         metric: tuneForm.value.metric,
-        direction: tuneForm.value.direction
+        direction: tuneForm.value.direction,
+        paramRanges: paramRanges
       }
     }
 
     ElMessage.info('开始超参数调优，请稍候...')
-    const result = await trainingStore.hyperparameterTuning(config)
-    tuneResult.value = result
-    ElMessage.success('超参数调优完成！')
+    const jobId = await trainingStore.submitTuningJob(config)
+    tuningJobId.value = jobId
+    isTuningRunning.value = true
+    ElMessage.success(`调优任务已提交, 任务ID: ${jobId}`)
+
+    // 开始轮询
+    startTuningPoll(jobId)
   } catch (error) {
     // 错误已由 request.js 拦截器统一提示
   }
 }
 
+const startTuningPoll = (jobId) => {
+  stopTuningPoll()
+
+  tuningPollTimer.value = setInterval(async () => {
+    try {
+      // 获取调优任务状态
+      const job = await trainingStore.fetchTuningJob(jobId)
+      currentTuningJob.value = job || {}
+
+      // 获取 trial 列表
+      trialsLoading.value = true
+      const trials = await trainingStore.fetchTuningTrials(jobId)
+      trialList.value = trials || []
+      trialsLoading.value = false
+
+      // 检查是否完成
+      if (job.status === 'SUCCESS' || job.status === 'FAILED') {
+        stopTuningPoll()
+        isTuningRunning.value = false
+
+        if (job.status === 'SUCCESS') {
+          ElMessage.success('超参数调优完成！')
+          tuneResult.value = {
+            bestParams: job.bestParams || {},
+            bestScore: job.bestScore,
+            metric: job.metric,
+            direction: job.direction,
+            finalMetrics: job.finalMetrics || {},
+            modelPath: job.modelPath
+          }
+        } else {
+          ElMessage.error('超参数调优失败: ' + (job.errorMessage || '未知错误'))
+        }
+
+        // 刷新历史记录
+        loadTuningHistory()
+      }
+    } catch (error) {
+      console.error('轮询调优状态失败:', error)
+      trialsLoading.value = false
+    }
+  }, 3000)
+}
+
+const stopTuningPoll = () => {
+  if (tuningPollTimer.value) {
+    clearInterval(tuningPollTimer.value)
+    tuningPollTimer.value = null
+  }
+}
+
+const loadTuningHistory = async () => {
+  try {
+    const data = await trainingStore.fetchTuningJobs()
+    tuningHistory.value = data || []
+  } catch (error) {
+    console.error('加载调优历史失败:', error)
+  }
+}
+
+const selectHistoryJob = async (row) => {
+  tuningJobId.value = row.id
+  currentTuningJob.value = row
+
+  if (row.status === 'PENDING' || row.status === 'RUNNING') {
+    isTuningRunning.value = true
+    tuneResult.value = null
+    startTuningPoll(row.id)
+  } else if (row.status === 'SUCCESS' || row.status === 'FAILED') {
+    isTuningRunning.value = false
+
+    const bestParams = parseJsonField(row.bestParams) || {}
+    const finalMetrics = parseJsonField(row.finalMetrics) || {}
+
+    tuneResult.value = {
+      bestParams,
+      bestScore: row.bestScore,
+      metric: row.metric,
+      direction: row.direction,
+      finalMetrics,
+      modelPath: row.modelPath,
+      nTrials: row.nTrials || 20,
+      experimentName: row.experimentName,
+      modelType: row.modelType,
+      datasetName: row.datasetName,
+      datasetVersion: row.datasetVersion,
+      status: row.status
+    }
+
+    // 加载 trial 列表
+    try {
+      trialsLoading.value = true
+      const trials = await trainingStore.fetchTuningTrials(row.id)
+      trialList.value = (trials || []).map(t => ({
+        ...t,
+        params: parseJsonField(t.params),
+        metrics: parseJsonField(t.metrics)
+      }))
+      trialsLoading.value = false
+    } catch (e) {
+      console.error('加载 trial 列表失败:', e)
+      trialsLoading.value = false
+    }
+  } else {
+    isTuningRunning.value = false
+    tuneResult.value = null
+  }
+}
+
 const handleReset = () => {
   tuneForm.value = defaultForm()
-  selectedDataset.value = ''
   versionList.value = []
+  stopTuningPoll()
+  isTuningRunning.value = false
   tuneResult.value = null
+  trialList.value = []
+  currentTuningJob.value = {}
+  tuningJobId.value = null
 }
 
 const handleNewTuning = () => {
-  tuneResult.value = null
-  tuneForm.value.experimentName = ''
-  selectedDataset.value = ''
-  tuneForm.value.datasetVersion = ''
-  versionList.value = []
+  handleReset()
 }
-
-onMounted(() => {
-  loadDatasets()
-})
 
 const copyModelPath = () => {
   if (tuneResult.value?.modelPath) {
@@ -405,12 +732,52 @@ const handleRegisterModel = async () => {
       modelPath: tuneResult.value.modelPath,
       performance: tuneResult.value.bestScore
     }
+    await registerModel(model)
     await trainingStore.fetchModels()
     ElMessage.success('模型已注册')
   } catch (error) {
     // 错误已由 request.js 拦截器统一提示
   }
 }
+
+const parseJsonField = (field) => {
+  if (!field) return null
+  if (typeof field === 'object') return field
+  try {
+    return JSON.parse(field)
+  } catch {
+    return null
+  }
+}
+
+const formatParams = (params) => {
+  if (!params) return '-'
+  try {
+    const obj = typeof params === 'object' ? params : JSON.parse(params)
+    return Object.entries(obj).map(([k, v]) => `${k}=${typeof v === 'number' ? v.toFixed(3) : v}`).join(', ')
+  } catch {
+    return String(params)
+  }
+}
+
+const getStatusType = (status) => {
+  const map = { PENDING: 'info', RUNNING: 'warning', SUCCESS: 'success', FAILED: 'danger' }
+  return map[status] || 'info'
+}
+
+const getTrialStatusType = (status) => {
+  const map = { PENDING: 'info', RUNNING: 'warning', SUCCESS: 'success', FAILED: 'danger' }
+  return map[status] || 'info'
+}
+
+onMounted(() => {
+  loadDatasets()
+  loadTuningHistory()
+})
+
+onUnmounted(() => {
+  stopTuningPoll()
+})
 </script>
 
 <style scoped lang="scss">
@@ -419,7 +786,8 @@ const handleRegisterModel = async () => {
 }
 
 .config-card,
-.result-card {
+.result-card,
+.history-card {
   .card-header {
     display: flex;
     justify-content: space-between;
@@ -434,11 +802,65 @@ const handleRegisterModel = async () => {
     line-height: 32px;
     color: $text-muted;
   }
+
+  .param-ranges {
+    .param-range-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+      padding: 8px 12px;
+      background: $bg-gray;
+      border-radius: $radius-sm;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
 }
 
 .empty-result {
   padding: 60px 0;
   text-align: center;
+}
+
+.tuning-progress {
+  .progress-header {
+    margin-bottom: 20px;
+
+    .progress-text {
+      text-align: center;
+      color: $text-muted;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+  }
+
+  .current-best {
+    margin-bottom: 16px;
+
+    .best-params-preview {
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+  }
+
+  .param-preview {
+    font-size: 12px;
+    color: $text-muted;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    max-width: 200px;
+  }
+
+  .best-score {
+    color: #67c23a;
+    font-weight: 600;
+  }
 }
 
 .tune-result {
@@ -498,6 +920,17 @@ const handleRegisterModel = async () => {
     display: flex;
     gap: 12px;
     justify-content: center;
+  }
+
+  .param-detail {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .param-tag-inline {
+    margin-right: 4px;
+    margin-bottom: 4px;
   }
 }
 

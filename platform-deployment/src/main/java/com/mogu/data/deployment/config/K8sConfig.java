@@ -2,6 +2,7 @@ package com.mogu.data.deployment.config;
 
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.apis.AppsV1Api;
+import io.kubernetes.client.openapi.apis.BatchV1Api;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.util.ClientBuilder;
 import io.kubernetes.client.util.KubeConfig;
@@ -64,5 +65,10 @@ public class K8sConfig {
     @Bean
     public AppsV1Api appsV1Api(ApiClient client) {
         return new AppsV1Api(client);
+    }
+
+    @Bean
+    public BatchV1Api batchV1Api(ApiClient client) {
+        return new BatchV1Api(client);
     }
 }

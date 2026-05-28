@@ -3,6 +3,7 @@ package com.mogu.data.deployment.service;
 import com.mogu.data.common.exception.BusinessException;
 import io.kubernetes.client.openapi.models.V1ConfigMap;
 import io.kubernetes.client.openapi.models.V1Deployment;
+import io.kubernetes.client.openapi.models.V1Job;
 import io.kubernetes.client.openapi.models.V1Namespace;
 import io.kubernetes.client.openapi.models.V1Pod;
 import io.kubernetes.client.openapi.models.V1Service;
@@ -114,5 +115,39 @@ public class NoOpK8sClientService implements K8sOperations {
     @Override
     public void deleteAllResources(String namespace, String deploymentName, String serviceName, String configMapName) {
         logNoOp("清理 K8s 资源");
+    }
+
+    @Override
+    public V1Job createTrainingJob(String namespace, String name, String image,
+                                   Map<String, String> envVars,
+                                   String cpuRequest, String memoryRequest,
+                                   String cpuLimit, String memoryLimit,
+                                   int activeDeadlineSeconds,
+                                   Map<String, String> labels) {
+        logNoOp("创建训练 Job");
+        throw notAvailable();
+    }
+
+    @Override
+    public V1Job getJobStatus(String namespace, String name) {
+        logNoOp("获取 Job 状态");
+        return null;
+    }
+
+    @Override
+    public void deleteJob(String namespace, String name) {
+        logNoOp("删除 Job");
+    }
+
+    @Override
+    public String getJobPodLogs(String namespace, String jobName, int tailLines) {
+        logNoOp("获取 Job Pod 日志");
+        return "K8s 不可用，无法获取日志";
+    }
+
+    @Override
+    public List<V1Pod> listJobPods(String namespace, String jobName) {
+        logNoOp("列出 Job Pod");
+        return new ArrayList<>();
     }
 }

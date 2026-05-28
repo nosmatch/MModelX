@@ -573,7 +573,8 @@ const startCompute = async () => {
     const response = await featuresStore.computeFeatures(
       definition,
       computeForm.value.inputPath || null,
-      computeForm.value.outputPath || null
+      computeForm.value.outputPath || null,
+      computeForm.value.partitionDate
     )
 
     // API 返回成功 → 完成计算

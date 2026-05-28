@@ -15,6 +15,7 @@ import com.mogu.data.feature.datasource.DataSourceType;
 import com.mogu.data.feature.engine.FeatureComputeEngine;
 import com.mogu.data.feature.entity.FeatureDefinition;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
@@ -53,16 +54,26 @@ public class FeatureComputeService {
     private final MaterializationHistoryRepository materializationHistoryRepository;
     private final ObjectMapper objectMapper;
 
+    @Value("${spring.data.redis.host:localhost}")
+    private String redisHost;
+
+    @Value("${spring.data.redis.port:6379}")
+    private int redisPort;
+
+    @Value("${spring.data.redis.database:0}")
+    private int redisDatabase;
+
     /**
      * 计算特征
      *
      * @param definition 特征定义
      * @param inputPath 输入路径（暂时未使用，保留兼容性）
      * @param outputPath 输出路径
+     * @param partitionDateStr 分区日期（YYYY-MM-DD），为空则使用今天
      */
-    public void computeFeatures(FeatureDefinition definition, String inputPath, String outputPath) {
+    public void computeFeatures(FeatureDefinition definition, String inputPath, String outputPath, String partitionDateStr) {
         String featureViewName = definition.getFeatureView();
-        LocalDate partitionDate = LocalDate.now(); // 默认使用今天
+        LocalDate partitionDate = parsePartitionDate(partitionDateStr); // 支持指定分区日期
         if (outputPath == null || outputPath.isEmpty()) {
             outputPath = buildOutputPath(featureViewName, partitionDate);
         }
@@ -140,7 +151,7 @@ public class FeatureComputeService {
      */
     public void computeFeatures(FeatureDefinition definition, LocalDate partitionDate) {
         String outputPath = buildOutputPath(definition.getFeatureView(), partitionDate);
-        computeFeatures(definition, null, outputPath);
+        computeFeatures(definition, null, outputPath, partitionDate.toString());
     }
 
     /**
@@ -174,8 +185,8 @@ public class FeatureComputeService {
      *
      * @param featureViewName 特征视图名称
      */
-    public void materializeFeatures(String featureViewName) {
-        log.info("开始物化特征到Redis: {}", featureViewName);
+    public void materializeFeatures(String featureViewName, String partitionDateStr) {
+        log.info("开始物化特征到Redis: {}, 分区日期: {}", featureViewName, partitionDateStr);
 
         // 创建物化历史记录（PENDING状态）
         MaterializationHistory history = MaterializationHistory.builder()
@@ -191,11 +202,25 @@ public class FeatureComputeService {
             FeatureView featureView = getFeatureViewById(featureViewName);
             log.info("特征视图TTL: {} 天", featureView.getTtl());
 
-            // 2. 从MinIO读取最新的特征文件
-            String latestPath = getLatestFeaturePath(featureViewName);
-            log.info("从MinIO读取特征文件: {}", latestPath);
+            // 2. 从MinIO读取特征文件（支持指定分区日期）
+            String path;
+            if (partitionDateStr != null && !partitionDateStr.isEmpty()) {
+                LocalDate partitionDate = parsePartitionDate(partitionDateStr);
+                path = buildOutputPath(featureViewName, partitionDate);
+            } else {
+                path = getLatestFeaturePath(featureViewName);
+            }
+            log.info("从MinIO读取特征文件: {}", path);
 
-            List<Map<String, Object>> features = readFromMinio(latestPath);
+            // 检查文件是否存在
+            if (!minioService.objectExists(FEATURES_BUCKET, path)) {
+                String dateHint = partitionDateStr != null ? partitionDateStr : "最新分区";
+                throw new BusinessException("404",
+                    "特征数据不存在: 特征视图 '" + featureViewName + "' 在分区 [" + dateHint +
+                    "] 下没有计算过的特征数据，请先执行特征计算");
+            }
+
+            List<Map<String, Object>> features = readFromMinio(path);
             log.info("读取了 {} 条特征记录", features.size());
 
             // 3. 写入Redis
@@ -441,6 +466,24 @@ public class FeatureComputeService {
     }
 
     /**
+     * 解析分区日期字符串
+     *
+     * @param partitionDateStr 分区日期字符串（YYYY-MM-DD）
+     * @return LocalDate，为空或解析失败则返回今天
+     */
+    private LocalDate parsePartitionDate(String partitionDateStr) {
+        if (partitionDateStr == null || partitionDateStr.isEmpty()) {
+            return LocalDate.now();
+        }
+        try {
+            return LocalDate.parse(partitionDateStr);
+        } catch (Exception e) {
+            log.warn("无法解析分区日期: {}，使用今天", partitionDateStr);
+            return LocalDate.now();
+        }
+    }
+
+    /**
      * 将Map配置转换为JSON字符串
      *
      * @param configMap 配置Map
@@ -648,14 +691,29 @@ public class FeatureComputeService {
      *
      * @param featureViewName 特征视图名称
      * @param limit 预览条数
+     * @param partitionDateStr 分区日期（YYYY-MM-DD），为空则取最新分区
      * @return 特征数据列表
      */
-    public List<Map<String, Object>> previewFeatures(String featureViewName, int limit) {
+    public List<Map<String, Object>> previewFeatures(String featureViewName, int limit, String partitionDateStr) {
         try {
-            String latestPath = getLatestFeaturePath(featureViewName);
-            log.info("预览特征数据: {}, 路径: {}, 条数: {}", featureViewName, latestPath, limit);
+            String path;
+            if (partitionDateStr != null && !partitionDateStr.isEmpty()) {
+                LocalDate partitionDate = parsePartitionDate(partitionDateStr);
+                path = buildOutputPath(featureViewName, partitionDate);
+            } else {
+                path = getLatestFeaturePath(featureViewName);
+            }
+            log.info("预览特征数据: {}, 路径: {}, 条数: {}", featureViewName, path, limit);
 
-            List<Map<String, Object>> allFeatures = readFromMinio(latestPath);
+            // 检查文件是否存在
+            if (!minioService.objectExists(FEATURES_BUCKET, path)) {
+                String dateHint = partitionDateStr != null ? partitionDateStr : "最新分区";
+                throw new BusinessException("404",
+                    "特征数据不存在: 特征视图 '" + featureViewName + "' 在分区 [" + dateHint +
+                    "] 下没有计算过的特征数据，请先执行特征计算");
+            }
+
+            List<Map<String, Object>> allFeatures = readFromMinio(path);
 
             if (allFeatures.isEmpty()) {
                 return Collections.emptyList();
@@ -687,6 +745,11 @@ public class FeatureComputeService {
     public Map<String, Object> getRedisStatus() {
         Map<String, Object> status = new HashMap<>();
         try {
+            // 基础连接信息
+            status.put("host", redisHost);
+            status.put("port", redisPort);
+            status.put("db", redisDatabase);
+
             // 测试连接：尝试scan一个key
             Set<String> testKeys = redisService.scan("feature:*", 1);
             status.put("connected", true);
@@ -792,6 +855,109 @@ public class FeatureComputeService {
                 .count();
         } catch (Exception e) {
             log.error("获取已物化视图数量失败: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * 清理过期特征
+     *
+     * 删除Redis中已过期（TTL <= 0 或不存在）的特征key
+     *
+     * @param scope 清理范围: "expired" 仅清理已过期, "all" 清理所有特征
+     * @param featureViewName 特征视图名称（scope为"all"时可选，为空则清理所有视图）
+     * @return 清理统计信息 {deletedCount, scannedCount, featureViewCount}
+     */
+    public Map<String, Object> cleanupExpiredFeatures(String scope, String featureViewName) {
+        log.info("开始清理过期特征: scope={}, featureViewName={}", scope, featureViewName);
+
+        Map<String, Object> result = new HashMap<>();
+        long deletedCount = 0;
+        long scannedCount = 0;
+        int viewCount = 0;
+
+        try {
+            // 确定要清理的key模式
+            List<String> patterns = new ArrayList<>();
+
+            if ("all".equals(scope)) {
+                if (featureViewName != null && !featureViewName.isEmpty()) {
+                    // 按指定视图清理
+                    FeatureView view = getFeatureViewById(featureViewName);
+                    String entity = view.getEntity();
+                    patterns.add("feature:" + entity + ":*");
+                    viewCount = 1;
+                    log.info("清理视图 {} 的所有特征 (entity={})", featureViewName, entity);
+                } else {
+                    // 清理所有特征视图
+                    patterns.add("feature:*");
+                    viewCount = (int) getMaterializedViewCount();
+                    log.info("清理所有特征视图的所有特征");
+                }
+            } else {
+                // "expired" 模式：扫描所有 feature:* 的 key，检查 TTL
+                patterns.add("feature:*");
+                log.info("仅清理已过期的特征");
+            }
+
+            for (String pattern : patterns) {
+                Set<String> keys = redisService.scan(pattern, 1000);
+                scannedCount += keys.size();
+
+                if ("expired".equals(scope)) {
+                    // 只删除 TTL <= 0 的 key（已过期）
+                    List<String> expiredKeys = new ArrayList<>();
+                    for (String key : keys) {
+                        Long ttl = redisService.getExpire(key);
+                        if (ttl != null && ttl <= 0) {
+                            expiredKeys.add(key);
+                        }
+                    }
+                    if (!expiredKeys.isEmpty()) {
+                        deletedCount += redisService.delete(expiredKeys);
+                    }
+                } else {
+                    // "all" 模式：删除匹配的 key
+                    if (!keys.isEmpty()) {
+                        deletedCount += redisService.delete(keys);
+                    }
+                }
+            }
+
+            result.put("deletedCount", deletedCount);
+            result.put("scannedCount", scannedCount);
+            result.put("featureViewCount", viewCount);
+            result.put("scope", scope);
+
+            log.info("特征清理完成: 扫描 {}, 删除 {}", scannedCount, deletedCount);
+
+        } catch (Exception e) {
+            log.error("清理过期特征失败", e);
+            throw new BusinessException("500", "清理过期特征失败: " + e.getMessage(), e);
+        }
+
+        return result;
+    }
+
+    /**
+     * 获取即将过期的特征key数量
+     *
+     * @param thresholdSeconds 阈值（秒），TTL 小于该值的 key 算即将过期，默认 86400（1天）
+     * @return 即将过期的key数量
+     */
+    public long getExpiringSoonCount(long thresholdSeconds) {
+        try {
+            Set<String> keys = redisService.scan("feature:*", 500);
+            long count = 0;
+            for (String key : keys) {
+                Long ttl = redisService.getExpire(key);
+                if (ttl != null && ttl > 0 && ttl < thresholdSeconds) {
+                    count++;
+                }
+            }
+            return count;
+        } catch (Exception e) {
+            log.error("获取即将过期特征数量失败", e);
             return 0;
         }
     }

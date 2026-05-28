@@ -107,14 +107,15 @@ export function registerFeatureDefinition(definition) {
  * @param {Object} definition - 特征定义
  * @param {string} [inputPath] - 输入路径
  * @param {string} [outputPath] - 输出路径
+ * @param {string} [partitionDate] - 分区日期（YYYY-MM-DD），默认今天
  * @returns {Promise<{code: string, message: string}>}
  */
-export function computeFeatures(definition, inputPath, outputPath) {
+export function computeFeatures(definition, inputPath, outputPath, partitionDate) {
   return request({
     url: '/features/compute',
     method: 'post',
     data: definition,
-    params: { inputPath, outputPath }
+    params: { inputPath, outputPath, partitionDate }
   })
 }
 
@@ -134,12 +135,18 @@ export function batchComputeFeatures(definitions) {
 /**
  * 物化特征到Redis（将MinIO中的离线特征写入在线存储）
  * @param {string} featureViewName - 特征视图名称
+ * @param {string} [partitionDate] - 分区日期（YYYY-MM-DD），默认取最新分区
  * @returns {Promise<{code: string, message: string}>}
  */
-export function materializeFeatures(featureViewName) {
+export function materializeFeatures(featureViewName, partitionDate) {
+  const params = {}
+  if (partitionDate) {
+    params.partitionDate = partitionDate
+  }
   return request({
     url: `/features/materialize/${encodeURIComponent(featureViewName)}`,
-    method: 'post'
+    method: 'post',
+    params
   })
 }
 
@@ -147,13 +154,18 @@ export function materializeFeatures(featureViewName) {
  * 预览特征数据（从MinIO读取）
  * @param {string} featureViewName - 特征视图名称
  * @param {number} [limit=10] - 预览条数
+ * @param {string} [partitionDate] - 分区日期（YYYY-MM-DD），默认取最新分区
  * @returns {Promise<{code: string, message: string, data: Array}>}
  */
-export function previewFeatures(featureViewName, limit = 10) {
+export function previewFeatures(featureViewName, limit = 10, partitionDate) {
+  const params = { limit }
+  if (partitionDate) {
+    params.partitionDate = partitionDate
+  }
   return request({
     url: `/features/preview/${encodeURIComponent(featureViewName)}`,
     method: 'get',
-    params: { limit }
+    params
   })
 }
 
@@ -220,6 +232,39 @@ export function getMaterializeHistory(featureViewName) {
     url: '/features/materialize/history',
     method: 'get',
     params: featureViewName ? { featureViewName } : {}
+  })
+}
+
+/**
+ * 获取即将过期的特征数量
+ * @param {number} [thresholdSeconds=86400] - TTL 阈值（秒）
+ * @returns {Promise<{code: string, message: string, data: {count: number, thresholdSeconds: number}}>}
+ */
+export function getExpiringCount(thresholdSeconds = 86400) {
+  return request({
+    url: '/features/redis/expiring-count',
+    method: 'get',
+    params: { thresholdSeconds }
+  })
+}
+
+/**
+ * 清理过期特征（从Redis中删除）
+ * @param {Object} params - 清理参数
+ * @param {string} [params.scope='expired'] - 清理范围：'expired' 仅过期，'all' 全部
+ * @param {string} [params.featureViewName] - 指定视图名称（scope='all'时有效）
+ * @returns {Promise<{code: string, message: string, data: {deletedCount: number, scannedCount: number, featureViewCount: number}}>}
+ */
+export function cleanupFeatures(params = {}) {
+  const { scope = 'expired', featureViewName } = params
+  const queryParams = { scope }
+  if (featureViewName) {
+    queryParams.featureViewName = featureViewName
+  }
+  return request({
+    url: '/features/redis/cleanup',
+    method: 'post',
+    params: queryParams
   })
 }
 
@@ -298,5 +343,7 @@ export default {
   searchRedisKeys,
   getRedisKeyValue,
   getMaterializeHistory,
-  previewFeatures
+  previewFeatures,
+  getExpiringCount,
+  cleanupFeatures
 }

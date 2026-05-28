@@ -2,6 +2,7 @@ package com.mogu.data.deployment.service;
 
 import io.kubernetes.client.openapi.models.V1ConfigMap;
 import io.kubernetes.client.openapi.models.V1Deployment;
+import io.kubernetes.client.openapi.models.V1Job;
 import io.kubernetes.client.openapi.models.V1Namespace;
 import io.kubernetes.client.openapi.models.V1Pod;
 import io.kubernetes.client.openapi.models.V1Service;
@@ -46,4 +47,21 @@ public interface K8sOperations {
     void ensureNamespaceExists(String namespace);
 
     void deleteAllResources(String namespace, String deploymentName, String serviceName, String configMapName);
+
+    // ========== 训练 Job ==========
+
+    V1Job createTrainingJob(String namespace, String name, String image,
+                            Map<String, String> envVars,
+                            String cpuRequest, String memoryRequest,
+                            String cpuLimit, String memoryLimit,
+                            int activeDeadlineSeconds,
+                            Map<String, String> labels);
+
+    V1Job getJobStatus(String namespace, String name);
+
+    void deleteJob(String namespace, String name);
+
+    String getJobPodLogs(String namespace, String jobName, int tailLines);
+
+    List<V1Pod> listJobPods(String namespace, String jobName);
 }

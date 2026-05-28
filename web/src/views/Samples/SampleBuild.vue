@@ -1,10 +1,5 @@
 <template>
   <div class="sample-build-page">
-    <!-- 返回按钮 -->
-    <div class="back-nav">
-      <el-button text :icon="ArrowLeft" @click="goBack">返回</el-button>
-    </div>
-
     <el-row :gutter="24">
       <!-- 左侧：配置选择 -->
       <el-col :span="8">
@@ -124,7 +119,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, VideoPlay, CircleCheck } from '@element-plus/icons-vue'
+import { VideoPlay, CircleCheck } from '@element-plus/icons-vue'
 import { useSamplesStore } from '@/stores/samples'
 import { LabelTypeLabels, SplitStrategyLabels } from '@/constants/status'
 
@@ -258,10 +253,6 @@ const resetBuild = () => {
   resetSteps()
 }
 
-const goBack = () => {
-  router.push({ name: 'SampleConfigList' })
-}
-
 const goToDatasets = () => {
   router.push({ name: 'DatasetList' })
 }
@@ -290,10 +281,6 @@ onMounted(() => {
 <style scoped lang="scss">
 .sample-build-page {
   padding: 24px;
-}
-
-.back-nav {
-  margin-bottom: 20px;
 }
 
 .config-card {

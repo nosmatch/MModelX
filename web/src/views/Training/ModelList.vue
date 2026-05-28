@@ -138,6 +138,9 @@
             <el-tooltip content="查看详情" placement="top">
               <el-button size="small" :icon="View" circle @click.stop="handleView(row)" />
             </el-tooltip>
+            <el-tooltip content="删除模型" placement="top">
+              <el-button size="small" type="danger" :icon="Delete" circle @click.stop="handleDelete(row)" />
+            </el-tooltip>
           </div>
         </template>
       </el-table-column>
@@ -178,7 +181,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Search, Refresh, View, Box, Promotion, FolderRemove
+  Search, Refresh, View, Box, Promotion, FolderRemove, Delete
 } from '@element-plus/icons-vue'
 import { useTrainingStore } from '@/stores/training'
 import { formatDate } from '@/utils/date'
@@ -256,6 +259,22 @@ const handleArchive = async (row) => {
     )
     await trainingStore.transitionModelStage(row.name, row.version, 'Archived')
     ElMessage.success('模型已归档')
+    await loadModels()
+  } catch (error) {
+    if (error === 'cancel') return
+    // 错误已由 request.js 拦截器统一提示
+  }
+}
+
+const handleDelete = async (row) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除模型 "${row.name}" (版本 ${row.version}) 吗？该操作会同步删除 MinIO 中的模型文件，且不可恢复。`,
+      '删除确认',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'danger' }
+    )
+    await trainingStore.deleteModel(row.name, row.version)
+    ElMessage.success('模型已删除（含 MinIO 文件）')
     await loadModels()
   } catch (error) {
     if (error === 'cancel') return

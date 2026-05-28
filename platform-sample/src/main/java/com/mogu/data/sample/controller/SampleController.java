@@ -130,6 +130,10 @@ public class SampleController {
         result.put("status", job.getStatus());
         result.put("progress", job.getProgress());
         result.put("currentStep", job.getCurrentStep());
+        result.put("entityCount", job.getEntityCount());
+        result.put("featureCount", job.getFeatureCount());
+        result.put("positiveCount", job.getPositiveCount());
+        result.put("negativeCount", job.getNegativeCount());
         result.put("errorMessage", job.getErrorMessage());
         result.put("startedAt", job.getStartedAt());
         result.put("completedAt", job.getCompletedAt());

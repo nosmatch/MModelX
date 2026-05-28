@@ -91,4 +91,27 @@ public class AuthenticationService {
         return userRepository.findByEmail(email)
                 .isPresent();
     }
+
+    /**
+     * 查找或创建开发环境测试用户
+     *
+     * @param username 用户名
+     * @param password 密码
+     * @return 用户对象
+     */
+    @Transactional
+    public User findOrCreateDevUser(String username, String password) {
+        return userRepository.findByUsername(username)
+                .orElseGet(() -> {
+                    User user = new User();
+                    user.setUsername(username);
+                    user.setPassword(passwordEncoder.encode(password));
+                    user.setEmail(username + "@mmodelx.local");
+                    user.setRole(User.UserRole.ADMIN);
+                    user.setStatus(User.UserStatus.ACTIVE);
+                    User saved = userRepository.save(user);
+                    log.info("Created dev user: {}", saved.getUsername());
+                    return saved;
+                });
+    }
 }

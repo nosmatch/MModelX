@@ -44,12 +44,11 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
     private static final String[] WHITELIST = {
             "/api/auth/**",
+            "/api/v1/auth/**",
             "/api/health",
             "/api/info",
             "/api/docs",
-            "/actuator/health",
-            "/actuator/info",
-            "/actuator/prometheus",
+            "/actuator/**",
             "/swagger-ui/**",
             "/v3/api-docs/**",
             "/swagger-resources/**",
@@ -99,7 +98,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                             .hasAnyRole("ENGINEER", "ADMIN")
                         // 特征、样本模块读权限：所有已登录角色
                         .antMatchers(HttpMethod.GET, "/api/v1/features/**", "/api/v1/samples/**")
-                            .hasAnyRole("ENGINEER", "MLOPS", "ADMIN")
+                            .authenticated()
                         // 数据源管理：MLOPS / ADMIN
                         .antMatchers("/api/v1/datasources/**").hasAnyRole("MLOPS", "ADMIN")
                         // 其余 /api/v1/** 默认要求登录

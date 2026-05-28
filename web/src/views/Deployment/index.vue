@@ -64,8 +64,8 @@
             <div class="model-info">
               <el-icon color="#409eff"><Box /></el-icon>
               <div>
-                <div class="model-name">{{ row.model?.name || '-' }}</div>
-                <div class="model-version">{{ row.model?.version || '-' }}</div>
+                <div class="model-name">{{ row.modelName || '-' }}</div>
+                <div class="model-version">{{ row.modelVersion || '-' }}</div>
               </div>
             </div>
           </template>
@@ -274,7 +274,7 @@ const filteredDeployments = computed(() => {
   if (searchKeyword.value) {
     const kw = searchKeyword.value.toLowerCase()
     result = result.filter(d =>
-      (d.model?.name || '').toLowerCase().includes(kw) ||
+      (d.modelName || '').toLowerCase().includes(kw) ||
       (d.deploymentName || '').toLowerCase().includes(kw) ||
       (d.namespace || '').toLowerCase().includes(kw)
     )
@@ -381,7 +381,7 @@ const handleViewPods = (row) => {
 
 const handleRedeploy = (row) => {
   deployForm.value = {
-    modelId: row.model?.id,
+    modelId: row.modelId,
     namespace: row.namespace,
     replicas: row.replicas,
     image: row.image,

@@ -17,6 +17,7 @@ public class DeploymentStatusDTO {
 
     private Long id;
     private Long deploymentId;
+    private Long modelId;
     private String modelName;
     private String modelVersion;
     private String namespace;

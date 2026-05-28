@@ -283,13 +283,14 @@ export const useFeaturesStore = defineStore('features', {
      * @param {Object} definition - 特征定义
      * @param {string} [inputPath] - 输入路径
      * @param {string} [outputPath] - 输出路径
+     * @param {string} [partitionDate] - 分区日期（YYYY-MM-DD）
      */
-    async computeFeatures(definition, inputPath, outputPath) {
+    async computeFeatures(definition, inputPath, outputPath, partitionDate) {
       try {
         this.loading.computing = true
         this.error = null
 
-        const response = await featuresApi.computeFeatures(definition, inputPath, outputPath)
+        const response = await featuresApi.computeFeatures(definition, inputPath, outputPath, partitionDate)
 
         if (response.code !== '200') {
           throw new Error(response.message || '特征计算失败')
@@ -333,13 +334,14 @@ export const useFeaturesStore = defineStore('features', {
     /**
      * 物化特征到Redis
      * @param {string} featureViewName - 特征视图名称
+     * @param {string} [partitionDate] - 分区日期（YYYY-MM-DD）
      */
-    async materializeFeatures(featureViewName) {
+    async materializeFeatures(featureViewName, partitionDate) {
       try {
         this.loading.materializing = true
         this.error = null
 
-        const response = await featuresApi.materializeFeatures(featureViewName)
+        const response = await featuresApi.materializeFeatures(featureViewName, partitionDate)
 
         if (response.code !== '200') {
           throw new Error(response.message || '特征物化失败')
@@ -375,6 +377,33 @@ export const useFeaturesStore = defineStore('features', {
         console.error('获取在线特征失败:', error)
         this.error = error.message || '获取在线特征失败'
         throw error
+      }
+    },
+
+    /**
+     * 清理Redis过期特征
+     * @param {Object} params - 清理参数
+     * @param {string} [params.scope='expired'] - 清理范围
+     * @param {string} [params.featureViewName] - 指定视图名称
+     */
+    async cleanupFeatures(params = {}) {
+      try {
+        this.loading.materializing = true
+        this.error = null
+
+        const response = await featuresApi.cleanupFeatures(params)
+
+        if (response.code !== '200') {
+          throw new Error(response.message || '清理特征失败')
+        }
+
+        return response.data
+      } catch (error) {
+        console.error('清理特征失败:', error)
+        this.error = error.message || '清理特征失败'
+        throw error
+      } finally {
+        this.loading.materializing = false
       }
     },
 

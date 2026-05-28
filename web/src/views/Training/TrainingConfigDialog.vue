@@ -26,7 +26,7 @@
       <!-- 数据集选择 -->
       <el-form-item label="数据集" prop="datasetName">
         <el-select
-          v-model="selectedDataset"
+          v-model="form.datasetName"
           placeholder="选择数据集"
           clearable
           :loading="loadingDatasets"
@@ -149,7 +149,11 @@ const props = defineProps({
   },
   mode: {
     type: String,
-    default: 'create' // 'create' | 'tune'
+    default: 'create' // 'create' | 'tune' | 'retry'
+  },
+  initialConfig: {
+    type: Object,
+    default: null
   }
 })
 
@@ -161,14 +165,16 @@ const loadingDatasets = ref(false)
 
 const datasetList = ref([])
 const versionList = ref([])
-const selectedDataset = ref('')
 
 const dialogTitle = computed(() => {
-  return props.mode === 'tune' ? '超参数调优配置' : '新建训练任务'
+  if (props.mode === 'tune') return '超参数调优配置'
+  if (props.mode === 'retry') return '重新训练配置'
+  return '新建训练任务'
 })
 
 const defaultForm = () => ({
   experimentName: '',
+  datasetName: '',
   datasetVersion: '',
   modelType: 'lightgbm',
   params: {
@@ -188,6 +194,9 @@ const rules = {
   experimentName: [
     { required: true, message: '请输入实验名称', trigger: 'blur' },
     { min: 3, max: 100, message: '长度在 3 到 100 个字符', trigger: 'blur' }
+  ],
+  datasetName: [
+    { required: true, message: '请选择数据集', trigger: 'change' }
   ],
   datasetVersion: [
     { required: true, message: '请输入数据集版本', trigger: 'blur' }
@@ -227,10 +236,39 @@ onMounted(() => {
 // 监听 visible 变化（对话框重新打开时刷新）
 watch(() => props.visible, (val) => {
   if (val) {
-    form.value = defaultForm()
-    selectedDataset.value = ''
     versionList.value = []
     loadDatasets()
+
+    if (props.initialConfig) {
+      // 预填充模式：从已有任务恢复配置
+      const targetModelType = props.initialConfig.modelType || 'lightgbm'
+      const params = props.initialConfig.params || {}
+
+      // 构造对应模型类型的默认参数，并用传入参数覆盖
+      let mergedParams
+      if (targetModelType === 'lightgbm') {
+        mergedParams = { num_leaves: 31, learning_rate: 0.05, feature_fraction: 0.8, bagging_fraction: 0.8, bagging_freq: 5, ...params }
+      } else {
+        mergedParams = { max_depth: 6, learning_rate: 0.05, subsample: 0.8, colsample_bytree: 0.8, ...params }
+      }
+
+      form.value = {
+        experimentName: props.initialConfig.experimentName || '',
+        datasetName: props.initialConfig.datasetName || '',
+        datasetVersion: props.initialConfig.datasetVersion || '',
+        modelType: targetModelType,
+        params: mergedParams,
+        metric: 'auc',
+        async: true
+      }
+
+      // 如果有数据集名称，加载版本列表
+      if (props.initialConfig.datasetName) {
+        handleDatasetChange(props.initialConfig.datasetName)
+      }
+    } else {
+      form.value = defaultForm()
+    }
   }
 })
 
@@ -290,6 +328,7 @@ const handleSubmit = async () => {
     // 构建后端需要的配置格式
     const config = {
       experimentName: form.value.experimentName,
+      datasetName: form.value.datasetName,
       datasetVersion: form.value.datasetVersion,
       model: {
         type: form.value.modelType,

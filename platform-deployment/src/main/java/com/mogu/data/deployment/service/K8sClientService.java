@@ -5,6 +5,7 @@ import io.kubernetes.client.custom.IntOrString;
 import io.kubernetes.client.custom.Quantity;
 import io.kubernetes.client.openapi.ApiException;
 import io.kubernetes.client.openapi.apis.AppsV1Api;
+import io.kubernetes.client.openapi.apis.BatchV1Api;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.models.*;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class K8sClientService implements K8sOperations {
 
     private final CoreV1Api coreV1Api;
     private final AppsV1Api appsV1Api;
+    private final BatchV1Api batchV1Api;
 
     private static final String APP_LABEL = "app";
     private static final String MANAGED_BY_LABEL = "managed-by";
@@ -341,6 +343,147 @@ public class K8sClientService implements K8sOperations {
             deleteConfigMap(namespace, configMapName);
         } catch (Exception e) {
             log.warn("删除 ConfigMap 失败（可能已不存在）: {}", e.getMessage());
+        }
+    }
+
+    // ========== 训练 Job 方法 ==========
+
+    @Override
+    public V1Job createTrainingJob(String namespace, String name, String image,
+                                   Map<String, String> envVars,
+                                   String cpuRequest, String memoryRequest,
+                                   String cpuLimit, String memoryLimit,
+                                   int activeDeadlineSeconds,
+                                   Map<String, String> labels) {
+        log.info("创建训练 Job: namespace={}, name={}, image={}", namespace, name, image);
+        try {
+            ensureNamespaceExists(namespace);
+
+            V1Job existing = getJob(namespace, name);
+            if (existing != null) {
+                log.warn("Job 已存在，先删除: {}", name);
+                deleteJob(namespace, name);
+            }
+
+            Map<String, String> jobLabels = new HashMap<>();
+            jobLabels.put(APP_LABEL, name);
+            jobLabels.put(MANAGED_BY_LABEL, MANAGED_BY_VALUE);
+            if (labels != null) {
+                jobLabels.putAll(labels);
+            }
+
+            List<V1EnvVar> envList = new ArrayList<>();
+            if (envVars != null) {
+                for (Map.Entry<String, String> entry : envVars.entrySet()) {
+                    envList.add(new V1EnvVar().name(entry.getKey()).value(entry.getValue()));
+                }
+            }
+
+            V1ResourceRequirements resources = new V1ResourceRequirements();
+            Map<String, Quantity> requests = new HashMap<>();
+            requests.put("cpu", new Quantity(cpuRequest));
+            requests.put("memory", new Quantity(memoryRequest));
+            resources.setRequests(requests);
+
+            Map<String, Quantity> limits = new HashMap<>();
+            limits.put("cpu", new Quantity(cpuLimit));
+            limits.put("memory", new Quantity(memoryLimit));
+            resources.setLimits(limits);
+
+            V1Job job = new V1Job()
+                    .apiVersion("batch/v1")
+                    .kind("Job")
+                    .metadata(new V1ObjectMeta().name(name).labels(jobLabels))
+                    .spec(new V1JobSpec()
+                            .ttlSecondsAfterFinished(300)
+                            .activeDeadlineSeconds((long) activeDeadlineSeconds)
+                            .backoffLimit(0)
+                            .template(new V1PodTemplateSpec()
+                                    .metadata(new V1ObjectMeta().labels(jobLabels))
+                                    .spec(new V1PodSpec()
+                                            .restartPolicy("Never")
+                                            .containers(Collections.singletonList(
+                                                    new V1Container()
+                                                            .name(name)
+                                                            .image(image)
+                                                            .imagePullPolicy("IfNotPresent")
+                                                            .env(envList)
+                                                            .resources(resources)
+                                            )))));
+
+            return batchV1Api.createNamespacedJob(namespace, job, null, null, null, null);
+        } catch (ApiException e) {
+            log.error("创建训练 Job 失败: {}", e.getResponseBody(), e);
+            throw new BusinessException("创建训练 Job 失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public V1Job getJobStatus(String namespace, String name) {
+        try {
+            return batchV1Api.readNamespacedJob(name, namespace, null);
+        } catch (ApiException e) {
+            if (e.getCode() == 404) {
+                return null;
+            }
+            throw new BusinessException("读取 Job 状态失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void deleteJob(String namespace, String name) {
+        log.info("删除 Job: namespace={}, name={}", namespace, name);
+        try {
+            batchV1Api.deleteNamespacedJob(name, namespace, null, null, null, null, null, null);
+            log.info("Job 删除成功: {}", name);
+        } catch (ApiException e) {
+            if (e.getCode() == 404) {
+                log.warn("Job 不存在，跳过删除: {}", name);
+                return;
+            }
+            log.error("删除 Job 失败: {}", e.getResponseBody(), e);
+            throw new BusinessException("删除 Job 失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public String getJobPodLogs(String namespace, String jobName, int tailLines) {
+        log.info("获取 Job Pod 日志: namespace={}, jobName={}", namespace, jobName);
+        try {
+            List<V1Pod> pods = listJobPods(namespace, jobName);
+            if (pods.isEmpty()) {
+                return "暂无 Pod 日志";
+            }
+            String podName = pods.get(0).getMetadata().getName();
+            return coreV1Api.readNamespacedPodLog(podName, namespace, null, false, null,
+                    null, null, null, tailLines, null, null);
+        } catch (ApiException e) {
+            log.error("获取 Pod 日志失败: {}", e.getResponseBody(), e);
+            return "获取日志失败: " + e.getMessage();
+        }
+    }
+
+    @Override
+    public List<V1Pod> listJobPods(String namespace, String jobName) {
+        try {
+            String selector = "app=" + jobName + ",managed-by=mmodelx";
+            V1PodList podList = coreV1Api.listNamespacedPod(namespace, null, null, null, null,
+                    selector, null, null, null, null, null);
+            return podList.getItems();
+        } catch (ApiException e) {
+            log.error("列出 Job Pod 失败: {}", e.getResponseBody(), e);
+            return Collections.emptyList();
+        }
+    }
+
+    private V1Job getJob(String namespace, String name) {
+        try {
+            return batchV1Api.readNamespacedJob(name, namespace, null);
+        } catch (ApiException e) {
+            if (e.getCode() == 404) {
+                return null;
+            }
+            throw new BusinessException("读取 Job 失败: " + e.getMessage());
         }
     }
 

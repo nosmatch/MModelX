@@ -10,8 +10,11 @@ import com.mogu.data.common.repository.SampleBuildJobRepository;
 import com.mogu.data.common.repository.SampleConfigRepository;
 import com.mogu.data.common.storage.MinioService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -39,6 +42,7 @@ public class SampleBuilderService {
     private final SampleConfigRepository configRepository;
     private final MinioService minioService;
     private final ObjectMapper objectMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     /**
      * 构造训练样本（完整流程）
@@ -82,7 +86,7 @@ public class SampleBuilderService {
         List<String> timestamps = extractTimestamps(labelData);
         List<String> featureViews = extractFeatureViews(config.getFeatureViews());
 
-        Map<String, Map<String, Object>> features = pointInTimeJoinService.join(
+        List<Map<String, Object>> features = pointInTimeJoinService.join(
                 entityIds, timestamps, featureViews);
 
         updateJobProgress(job, 50, "合并样本数据");
@@ -129,8 +133,20 @@ public class SampleBuilderService {
                 qualityReport
         );
 
-        // 8. 完成任务
-        completeJob(job, sampleData.size(), splitPaths, qualityReport);
+        // 8. 统计正负样本数
+        long positiveCount = 0;
+        long negativeCount = 0;
+        for (Map<String, Object> row : sampleData) {
+            Object label = row.get(config.getLabelColumn());
+            if (label != null && (label.equals(1) || label.equals("1") || label.equals(true))) {
+                positiveCount++;
+            } else {
+                negativeCount++;
+            }
+        }
+
+        // 9. 完成任务
+        completeJob(job, sampleData.size(), featureCount, positiveCount, negativeCount, splitPaths, qualityReport);
 
         log.info("样本构造完成: {}, 数据集版本: {}", config.getName(), datasetVersion);
     }
@@ -141,15 +157,21 @@ public class SampleBuilderService {
     public Map<String, Object> pointInTimeJoin(List<String> entityIds,
                                                 List<String> timestamps,
                                                 List<String> featureViews) {
-        Map<String, Map<String, Object>> result = pointInTimeJoinService.join(
+        List<Map<String, Object>> resultList = pointInTimeJoinService.join(
                 entityIds, timestamps, featureViews);
+
+        // 转换为 Map 格式保持 API 响应兼容（同一实体取最后一条）
+        Map<String, Map<String, Object>> resultMap = new LinkedHashMap<>();
+        for (int i = 0; i < entityIds.size(); i++) {
+            resultMap.put(entityIds.get(i), resultList.get(i));
+        }
 
         Map<String, Object> response = new HashMap<>();
         response.put("entityIds", entityIds);
         response.put("timestamps", timestamps);
         response.put("featureViews", featureViews);
-        response.put("features", result);
-        response.put("sampleCount", result.size());
+        response.put("features", resultMap);
+        response.put("sampleCount", resultList.size());
 
         return response;
     }
@@ -243,12 +265,18 @@ public class SampleBuilderService {
     }
 
     private void completeJob(SampleBuildJob job, int sampleCount,
+                              Integer featureCount,
+                              long positiveCount,
+                              long negativeCount,
                               Map<String, String> splitPaths,
                               Map<String, Object> qualityReport) {
         job.setProgress(100);
         job.setStatus(SampleBuildJob.JobStatus.SUCCESS);
         job.setCompletedAt(LocalDateTime.now());
         job.setEntityCount((long) sampleCount);
+        job.setFeatureCount(featureCount);
+        job.setPositiveCount(positiveCount);
+        job.setNegativeCount(negativeCount);
         job.setOutputPath(splitPaths.get("output"));
         job.setTrainPath(splitPaths.get("train"));
         job.setValPath(splitPaths.get("val"));
@@ -273,27 +301,79 @@ public class SampleBuilderService {
     private List<Map<String, Object>> readLabelData(SampleConfig config) {
         String labelTable = config.getLabelTable();
         String labelColumn = config.getLabelColumn();
+        String timeColumn = config.getTimeColumn();
 
         // 防御：如果标签配置为空，使用默认值
         if (labelColumn == null || labelColumn.trim().isEmpty()) {
-            labelColumn = "label";
+            labelColumn = "is_churned";
         }
         if (labelTable == null || labelTable.trim().isEmpty()) {
             labelTable = "user_labels";
         }
-
-        log.info("读取标签数据: table={}, column={}", labelTable, labelColumn);
-
-        List<Map<String, Object>> mockData = new ArrayList<>();
-        for (int i = 0; i < 100; i++) {
-            Map<String, Object> row = new HashMap<>();
-            row.put("entity_id", "user_" + String.format("%04d", i + 1));
-            row.put("timestamp", LocalDateTime.now().minusDays(i % 30).toString());
-            row.put(labelColumn, i % 2);
-            mockData.add(row);
+        if (timeColumn == null || timeColumn.trim().isEmpty()) {
+            timeColumn = "label_date";
         }
 
-        return mockData;
+        log.info("读取标签数据: table={}, column={}, timeColumn={}, startTime={}, endTime={}",
+                labelTable, labelColumn, timeColumn, config.getStartTime(), config.getEndTime());
+
+        // 构建 SQL（表名和列名来自配置，值用参数化查询防注入）
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT user_id AS entity_id, ")
+           .append(sanitizeIdentifier(timeColumn)).append(" AS ts, ")
+           .append(sanitizeIdentifier(labelColumn)).append(" AS lbl ")
+           .append("FROM ").append(sanitizeIdentifier(labelTable)).append(" ")
+           .append("WHERE 1=1 ");
+
+        List<Object> params = new ArrayList<>();
+
+        if (config.getStartTime() != null) {
+            sql.append("AND ").append(sanitizeIdentifier(timeColumn)).append(" >= ? ");
+            params.add(config.getStartTime());
+        }
+        if (config.getEndTime() != null) {
+            sql.append("AND ").append(sanitizeIdentifier(timeColumn)).append(" <= ? ");
+            params.add(config.getEndTime());
+        }
+
+        sql.append("ORDER BY ").append(sanitizeIdentifier(timeColumn)).append(", user_id");
+
+        final String resultLabelColumn = labelColumn;
+
+        try {
+            return jdbcTemplate.query(sql.toString(), params.toArray(), (rs, rowNum) -> {
+                Map<String, Object> row = new HashMap<>();
+                row.put("entity_id", rs.getString("entity_id"));
+
+                // 兼容 DATE / TIMESTAMP 类型，统一转为字符串
+                Object tsObj = rs.getObject("ts");
+                if (tsObj instanceof java.sql.Timestamp) {
+                    row.put("timestamp", ((java.sql.Timestamp) tsObj).toLocalDateTime().toString());
+                } else if (tsObj instanceof java.sql.Date) {
+                    row.put("timestamp", ((java.sql.Date) tsObj).toLocalDate().toString());
+                } else if (tsObj != null) {
+                    row.put("timestamp", tsObj.toString());
+                } else {
+                    row.put("timestamp", LocalDateTime.now().toString());
+                }
+
+                row.put(resultLabelColumn, rs.getObject("lbl"));
+                return row;
+            });
+        } catch (Exception e) {
+            log.error("读取标签数据失败: SQL={}, 原因={}", sql, e.getMessage(), e);
+            throw new BusinessException("读取标签数据失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 简单的 SQL 标识符校验，防止 SQL 注入
+     */
+    private String sanitizeIdentifier(String identifier) {
+        if (identifier == null || !identifier.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) {
+            throw new BusinessException("非法的数据库标识符: " + identifier);
+        }
+        return identifier;
     }
 
     private List<String> extractEntityIds(List<Map<String, Object>> labelData) {
@@ -325,19 +405,18 @@ public class SampleBuilderService {
 
     private List<Map<String, Object>> mergeFeaturesAndLabels(
             List<Map<String, Object>> labelData,
-            Map<String, Map<String, Object>> features) {
+            List<Map<String, Object>> features) {
 
         List<Map<String, Object>> merged = new ArrayList<>();
 
-        for (Map<String, Object> labelRow : labelData) {
-            String entityId = (String) labelRow.get("entity_id");
-            Map<String, Object> row = new HashMap<>(labelRow);
-
-            Map<String, Object> entityFeatures = features.get(entityId);
-            if (entityFeatures != null) {
-                row.putAll(entityFeatures);
+        for (int i = 0; i < labelData.size(); i++) {
+            // 特征缺失则丢弃整条记录
+            if (i >= features.size() || features.get(i) == null || features.get(i).isEmpty()) {
+                continue;
             }
 
+            Map<String, Object> row = new HashMap<>(labelData.get(i));
+            row.putAll(features.get(i));
             merged.add(row);
         }
 

@@ -30,6 +30,9 @@ public class TrainingJob {
     @Column(name = "experiment_name", nullable = false, length = 100)
     private String experimentName;
 
+    @Column(name = "dataset_name", length = 100)
+    private String datasetName;
+
     @Column(name = "dataset_version", length = 50)
     private String datasetVersion;
 

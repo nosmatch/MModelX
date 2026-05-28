@@ -107,6 +107,25 @@ public class MinioService {
     }
 
     /**
+     * 检查对象是否存在
+     */
+    public boolean objectExists(String bucketName, String objectName) {
+        try {
+            minioClient.statObject(StatObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(objectName)
+                    .build());
+            return true;
+        } catch (io.minio.errors.ErrorResponseException e) {
+            // NoSuchKey 表示对象不存在
+            return false;
+        } catch (Exception e) {
+            log.error("检查对象是否存在失败: {}", e.getMessage(), e);
+            throw new RuntimeException("检查对象是否存在失败", e);
+        }
+    }
+
+    /**
      * 删除文件
      */
     public void deleteFile(String bucketName, String objectName) {

@@ -208,6 +208,59 @@ export const useTrainingStore = defineStore('training', {
     },
 
     /**
+     * 重新训练（基于已有任务配置）
+     * @param {number} jobId - 原任务ID
+     * @returns {Promise<number>} 新任务ID
+     */
+    async retryJob(jobId) {
+      try {
+        this.loading.training = true
+        this.error = null
+
+        const response = await trainingApi.retryTrainingJob(jobId)
+
+        const isSuccess = response.code === '200' || response.code === 200
+        if (isSuccess) {
+          await this.fetchJobs()
+          return response.data
+        } else {
+          throw new Error(response.message || '重新训练失败')
+        }
+      } catch (error) {
+        console.error('重新训练失败:', error)
+        this.error = error.message || '重新训练失败'
+        throw error
+      } finally {
+        this.loading.training = false
+      }
+    },
+
+    /**
+     * 删除训练任务
+     * @param {number} jobId - 任务ID
+     */
+    async deleteJob(jobId) {
+      try {
+        this.error = null
+
+        const response = await trainingApi.deleteTrainingJob(jobId)
+
+        const isSuccess = response.code === '200' || response.code === 200
+        if (isSuccess) {
+          // 从列表中移除
+          this.jobs = this.jobs.filter(j => j.id !== jobId)
+          return true
+        } else {
+          throw new Error(response.message || '删除训练任务失败')
+        }
+      } catch (error) {
+        console.error('删除训练任务失败:', error)
+        this.error = error.message || '删除训练任务失败'
+        throw error
+      }
+    },
+
+    /**
      * 同步训练
      * @param {Object} config - 训练配置
      */
@@ -339,6 +392,31 @@ export const useTrainingStore = defineStore('training', {
     },
 
     /**
+     * 删除实验
+     * @param {string} name - 实验名称
+     */
+    async deleteExperiment(name) {
+      try {
+        this.error = null
+
+        const response = await trainingApi.deleteExperiment(name)
+
+        const isSuccess = response.code === '200' || response.code === 200
+        if (isSuccess) {
+          // 从列表中移除
+          this.experiments = this.experiments.filter(e => e.name !== name)
+          return true
+        } else {
+          throw new Error(response.message || '删除实验失败')
+        }
+      } catch (error) {
+        console.error('删除实验失败:', error)
+        this.error = error.message || '删除实验失败'
+        throw error
+      }
+    },
+
+    /**
      * 获取模型列表
      */
     async fetchModels() {
@@ -360,6 +438,32 @@ export const useTrainingStore = defineStore('training', {
         throw error
       } finally {
         this.loading.models = false
+      }
+    },
+
+    /**
+     * 删除模型（包括 MinIO 文件）
+     * @param {string} name - 模型名称
+     * @param {string} version - 模型版本
+     */
+    async deleteModel(name, version) {
+      try {
+        this.error = null
+
+        const response = await trainingApi.deleteModel(name, version)
+
+        const isSuccess = response.code === '200' || response.code === 200
+        if (isSuccess) {
+          // 从列表中移除
+          this.models = this.models.filter(m => !(m.name === name && m.version === version))
+          return true
+        } else {
+          throw new Error(response.message || '删除模型失败')
+        }
+      } catch (error) {
+        console.error('删除模型失败:', error)
+        this.error = error.message || '删除模型失败'
+        throw error
       }
     },
 
@@ -408,28 +512,108 @@ export const useTrainingStore = defineStore('training', {
     },
 
     /**
-     * 超参数调优
-     * @param {Object} config - 训练配置
+     * 获取训练任务日志
+     * @param {number} jobId - 任务ID
      */
-    async hyperparameterTuning(config) {
+    async fetchJobLogs(jobId) {
+      try {
+        const response = await trainingApi.getJobLogs(jobId)
+
+        const isSuccess = response.code === '200' || response.code === 200
+        if (isSuccess) {
+          return response.data || '暂无日志'
+        } else {
+          throw new Error(response.message || '获取日志失败')
+        }
+      } catch (error) {
+        console.error('获取日志失败:', error)
+        throw error
+      }
+    },
+
+    /**
+     * 提交超参数调优任务
+     * @param {Object} config - 训练配置
+     * @returns {Promise<number>} 调优任务ID
+     */
+    async submitTuningJob(config) {
       try {
         this.loading.tuning = true
         this.error = null
 
-        const response = await trainingApi.hyperparameterTuning(config)
+        const response = await trainingApi.submitTuningJob(config)
 
         const isSuccess = response.code === '200' || response.code === 200
         if (isSuccess) {
           return response.data
         } else {
-          throw new Error(response.message || '超参数调优失败')
+          throw new Error(response.message || '提交调优任务失败')
         }
       } catch (error) {
-        console.error('超参数调优失败:', error)
-        this.error = error.message || '超参数调优失败'
+        console.error('提交调优任务失败:', error)
+        this.error = error.message || '提交调优任务失败'
         throw error
       } finally {
         this.loading.tuning = false
+      }
+    },
+
+    /**
+     * 获取调优任务状态
+     * @param {number} tuningJobId - 调优任务ID
+     */
+    async fetchTuningJob(tuningJobId) {
+      try {
+        const response = await trainingApi.getTuningJob(tuningJobId)
+
+        const isSuccess = response.code === '200' || response.code === 200
+        if (isSuccess) {
+          return response.data
+        } else {
+          throw new Error(response.message || '获取调优任务状态失败')
+        }
+      } catch (error) {
+        console.error('获取调优任务状态失败:', error)
+        throw error
+      }
+    },
+
+    /**
+     * 获取调优任务 trial 列表
+     * @param {number} tuningJobId - 调优任务ID
+     */
+    async fetchTuningTrials(tuningJobId) {
+      try {
+        const response = await trainingApi.getTuningTrials(tuningJobId)
+
+        const isSuccess = response.code === '200' || response.code === 200
+        if (isSuccess) {
+          return response.data || []
+        } else {
+          throw new Error(response.message || '获取 trial 列表失败')
+        }
+      } catch (error) {
+        console.error('获取 trial 列表失败:', error)
+        throw error
+      }
+    },
+
+    /**
+     * 获取调优任务列表
+     */
+    async fetchTuningJobs() {
+      try {
+        const response = await trainingApi.listTuningJobs()
+
+        const isSuccess = response.code === '200' || response.code === 200
+        if (isSuccess) {
+          return response.data || []
+        } else {
+          throw new Error(response.message || '获取调优任务列表失败')
+        }
+      } catch (error) {
+        console.error('获取调优任务列表失败:', error)
+        throw error
       }
     },
 

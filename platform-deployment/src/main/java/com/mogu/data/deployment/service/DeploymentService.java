@@ -430,6 +430,7 @@ public class DeploymentService {
         dto.setId(deployment.getId());
         dto.setDeploymentId(deployment.getId());
         if (deployment.getModel() != null) {
+            dto.setModelId(deployment.getModel().getId());
             dto.setModelName(deployment.getModel().getName());
             dto.setModelVersion(deployment.getModel().getVersion());
         }

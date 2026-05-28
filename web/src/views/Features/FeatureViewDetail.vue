@@ -172,6 +172,7 @@ import {
   DocumentAdd
 } from '@element-plus/icons-vue'
 import { useFeaturesStore } from '@/stores/features'
+import * as featuresApi from '@/api/modules/features'
 import { formatDate as formatDateTime } from '@/utils/date'
 import { FeatureViewStatusLabels, FeatureViewStatusColors } from '@/constants/features'
 import FeatureDialog from './FeatureDialog.vue'

@@ -9,6 +9,7 @@ import com.mogu.data.common.entity.Model;
 import com.mogu.data.common.exception.BusinessException;
 import com.mogu.data.common.repository.ExperimentRepository;
 import com.mogu.data.common.repository.ModelRepository;
+import com.mogu.data.common.storage.MinioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ public class MlflowRegistryService {
 
     private final ExperimentRepository experimentRepository;
     private final ModelRepository modelRepository;
+    private final MinioService minioService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
@@ -279,10 +281,47 @@ public class MlflowRegistryService {
 
     /**
      * 列出所有实验
+     * 优先从内存缓存获取，缓存为空时从数据库回查
      * @return 实验列表
      */
     public java.util.List<ExperimentDTO> listExperiments() {
-        return experimentCache.values().stream().collect(java.util.stream.Collectors.toList());
+        java.util.List<ExperimentDTO> result = new java.util.ArrayList<>();
+        java.util.Set<String> cacheNames = new java.util.HashSet<>();
+
+        // 1. 先从内存缓存取
+        for (ExperimentDTO exp : experimentCache.values()) {
+            result.add(exp);
+            cacheNames.add(exp.getName());
+        }
+
+        // 2. 从数据库补充
+        try {
+            java.util.List<Experiment> dbExperiments = experimentRepository.findAll(
+                org.springframework.data.domain.Sort.by(
+                    org.springframework.data.domain.Sort.Direction.DESC, "createdAt"
+                )
+            );
+            for (Experiment entity : dbExperiments) {
+                if (!cacheNames.contains(entity.getName())) {
+                    ExperimentDTO dto = new ExperimentDTO();
+                    dto.setId(entity.getId());
+                    dto.setName(entity.getName());
+                    dto.setDescription(entity.getDescription());
+                    dto.setModelType(entity.getModelType());
+                    dto.setStatus(entity.getStatus() != null ? entity.getStatus().name() : "RUNNING");
+                    dto.setCreatedAt(entity.getCreatedAt());
+                    dto.setUpdatedAt(entity.getUpdatedAt());
+                    if (entity.getHyperparameters() != null) {
+                        dto.setParams(objectMapper.convertValue(entity.getHyperparameters(), Map.class));
+                    }
+                    result.add(dto);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("从数据库查询实验列表失败: {}", e.getMessage());
+        }
+
+        return result;
     }
 
     /**
@@ -299,10 +338,135 @@ public class MlflowRegistryService {
     }
 
     /**
+     * 删除实验
+     * @param name 实验名称
+     */
+    public void deleteExperiment(String name) {
+        log.info("删除实验: {}", name);
+
+        try {
+            // 1. 从内存缓存移除
+            experimentCache.remove(name);
+
+            // 2. 从数据库删除
+            java.util.List<Experiment> experiments = experimentRepository.findByName(name);
+            if (!experiments.isEmpty()) {
+                experimentRepository.deleteAll(experiments);
+            }
+
+            log.info("实验已删除: {}", name);
+        } catch (Exception e) {
+            log.error("删除实验失败: {}", e.getMessage(), e);
+            throw new BusinessException("删除实验失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 列出所有模型
+     * 优先从内存缓存获取，缓存为空时从数据库回查
      * @return 模型列表
      */
     public java.util.List<ModelDTO> listModels() {
-        return modelCache.values().stream().collect(java.util.stream.Collectors.toList());
+        java.util.List<ModelDTO> result = new java.util.ArrayList<>();
+        java.util.Set<String> cacheKeys = new java.util.HashSet<>();
+
+        // 1. 先从内存缓存取
+        for (ModelDTO model : modelCache.values()) {
+            result.add(model);
+            cacheKeys.add(model.getName() + ":" + model.getVersion());
+        }
+
+        // 2. 从数据库补充（缓存中没有的模型）
+        try {
+            java.util.List<Model> dbModels = modelRepository.findAll(
+                org.springframework.data.domain.Sort.by(
+                    org.springframework.data.domain.Sort.Direction.DESC, "registeredAt"
+                )
+            );
+            for (Model entity : dbModels) {
+                String key = entity.getName() + ":" + entity.getVersion();
+                if (!cacheKeys.contains(key)) {
+                    ModelDTO dto = new ModelDTO();
+                    dto.setId(entity.getId());
+                    dto.setName(entity.getName());
+                    dto.setVersion(entity.getVersion());
+                    dto.setModelType(entity.getModelType());
+                    dto.setModelPath(entity.getFilePath());
+                    dto.setStage(entity.getStage() != null ? entity.getStage().name() : "Staging");
+                    dto.setCreatedAt(entity.getCreatedAt());
+                    dto.setUpdatedAt(entity.getUpdatedAt());
+                    // 从 metrics jsonb 中提取 performance (auc)
+                    if (entity.getMetrics() != null && entity.getMetrics().has("performance")) {
+                        dto.setPerformance(entity.getMetrics().get("performance").asDouble());
+                    }
+                    result.add(dto);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("从数据库查询模型列表失败: {}", e.getMessage());
+        }
+
+        return result;
+    }
+
+    /**
+     * 删除模型（包括 MinIO 文件、数据库记录和内存缓存）
+     * @param name 模型名称
+     * @param version 模型版本
+     */
+    public void deleteModel(String name, String version) {
+        log.info("删除模型: {}, 版本: {}", name, version);
+
+        try {
+            String modelKey = name + ":" + version;
+            ModelDTO modelDTO = modelCache.get(modelKey);
+
+            // 1. 删除 MinIO 中的模型文件
+            String modelPath = modelDTO != null ? modelDTO.getModelPath() : null;
+            if (modelPath == null || modelPath.isEmpty()) {
+                // 从数据库中获取文件路径
+                Optional<Model> optional = modelRepository.findByNameAndVersion(name, version);
+                if (optional.isPresent()) {
+                    modelPath = optional.get().getFilePath();
+                }
+            }
+
+            if (modelPath != null && !modelPath.isEmpty()) {
+                try {
+                    String[] parts = modelPath.split("/", 2);
+                    if (parts.length == 2) {
+                        String bucket = parts[0];
+                        String objectName = parts[1];
+                        minioService.deleteFile(bucket, objectName);
+                        log.info("已删除 MinIO 模型文件: {}/{}", bucket, objectName);
+
+                        // 尝试删除同目录下的 metrics.json
+                        String metricsObjectName = objectName.substring(0, objectName.lastIndexOf('/') + 1) + "metrics.json";
+                        try {
+                            minioService.deleteFile(bucket, metricsObjectName);
+                            log.info("已删除 MinIO metrics 文件: {}/{}", bucket, metricsObjectName);
+                        } catch (Exception e) {
+                            log.debug("metrics 文件不存在或删除失败: {}", metricsObjectName);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("删除 MinIO 模型文件失败: {}, 错误: {}", modelPath, e.getMessage());
+                }
+            }
+
+            // 2. 从内存缓存移除
+            modelCache.remove(modelKey);
+
+            // 3. 从数据库删除
+            Optional<Model> optional = modelRepository.findByNameAndVersion(name, version);
+            if (optional.isPresent()) {
+                modelRepository.delete(optional.get());
+            }
+
+            log.info("模型已删除: {}:{}", name, version);
+        } catch (Exception e) {
+            log.error("删除模型失败: {}", e.getMessage(), e);
+            throw new BusinessException("删除模型失败: " + e.getMessage());
+        }
     }
 }
